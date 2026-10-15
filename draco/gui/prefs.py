@@ -39,6 +39,9 @@ class PrefsDialog(Adw.PreferencesDialog):
                                lambda r, _p: app.set_theme(self.theme_keys[r.get_selected()]))
         g.add(self.theme_row)
         from .. import native
+        self._switch(g, "background_on_close", "Keep running in the background when the window is closed")
+        self.rows["background_on_close"].set_subtitle(
+            "No taskbar entry; browser downloads are still caught. Quit with Tasks → Exit or Ctrl+Q")
         self.autostart = Adw.SwitchRow(title="Start Draco hidden at login",
                                        subtitle="Needed for snap/flatpak browsers and scheduled queues",
                                        active=native.autostart_enabled())

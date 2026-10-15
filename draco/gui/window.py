@@ -775,11 +775,17 @@ class MainWindow(Adw.ApplicationWindow):
         self.toast_overlay.add_toast(Adw.Toast(title=text, timeout=3))
 
     def _on_close(self, *_):
-        if self.manager.tasks:
-            self.set_visible(False)  # keep downloading in the background
-            self.app.notify_text("Draco is still downloading",
-                                 "Downloads continue in the background. Open Draco again to show the window.",
-                                 quit_button=True)
+        if self.manager.tasks or self.app.settings.get("background_on_close", True):
+            # Keep running hidden: no window means no taskbar/dock entry, but browser downloads are
+            # still caught instantly and progress windows still appear. Open Draco again to show it.
+            self.set_visible(False)
+            if not getattr(self.app, "_told_background", False):   # say it once per session
+                self.app._told_background = True
+                body = ("Downloads continue in the background." if self.manager.tasks else
+                        "Draco keeps running to catch browser downloads.")
+                self.app.notify_text("Draco is running in the background",
+                                     body + " Open Draco from the app menu to show it again.",
+                                     quit_button=True)
             return True
         # Nothing downloading: really exit (the app holds itself alive, so closing the window alone isn't enough).
         self.app._quit()

@@ -81,6 +81,7 @@ DEFAULT_SETTINGS = {
     "use_category_folders": True,
     "temp_suffix": ".dracopart",
     "show_progress_dialog": True,
+    "background_on_close": True,     # closing the window keeps Draco running hidden (no taskbar entry)
     "show_complete_dialog": True,
     "start_immediately": False,      # skip the "file info" dialog for new downloads
     "clipboard_monitor": True,

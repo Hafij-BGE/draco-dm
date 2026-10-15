@@ -36,6 +36,9 @@ sh %{draco_src}/packaging/linux/stage.sh %{buildroot} %{_prefix}
 %{_datadir}/licenses/draco-dm
 
 %changelog
+* Thu Oct 15 2026 Md Hafijur Rahman <draco@localhost> - 1.4.6-1
+- Keep running in the background when the window is closed
+
 * Thu Oct 15 2026 Md Hafijur Rahman <draco@localhost> - 1.4.5-1
 - Progress window also for downloads taken from the browser
 
