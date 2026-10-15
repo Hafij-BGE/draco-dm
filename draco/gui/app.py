@@ -163,7 +163,38 @@ class DracoApp(Adw.Application):
             return {"ok": True, "version": __version__}
         if cmd == "status":
             return {"ok": True, "items": len(self.manager.items), "active": len(self.manager.tasks)}
+        if cmd == "add" and msg.get("verify"):
+            # A capture from the browser: check now (on this IPC thread) that Draco can really fetch
+            # the link. If the server refuses a second request (POST forms, one-time links such as
+            # Google Drive), say no so the browser simply carries on with its own download.
+            verdict = self._verify_capture(msg)
+            if not verdict.get("ok"):
+                return verdict
         GLib.idle_add(self._dispatch_main, msg)
+        return {"ok": True}
+
+    def _verify_capture(self, msg):
+        url = (msg.get("url") or "").strip()
+        if not util.looks_like_url(url) or is_hls(url):
+            return {"ok": True}
+        item = {"url": url, "referer": msg.get("referer", ""), "cookies": msg.get("cookies", ""),
+                "user_agent": msg.get("user_agent", ""), "headers": msg.get("headers") or {}}
+        real = self.settings
+
+        class _Quick:            # the user's settings, but give up after 8 s (the browser is waiting)
+            def __getitem__(self, k):
+                return 8 if k == "timeout" else real[k]
+
+            def login_for(self, u):
+                return real.login_for(u)
+
+        try:
+            info = probe(item, _Quick())
+        except DownloadError as e:
+            return {"ok": False, "error": f"Draco cannot fetch this link ({e}); left to the browser"}
+        if 0 <= info["size"] < 1024 and (info["content_type"] or "").startswith("text/html"):
+            return {"ok": False, "error": "The link returns a web page, not the file; left to the browser"}
+        msg["_probe"] = info
         return {"ok": True}
 
     def _dispatch_main(self, msg):
@@ -239,7 +270,7 @@ class DracoApp(Adw.Application):
                 return
             item["filename"] = item.get("filename") or sanitize_filename(f"{host} video.mp4")
             item["_loading"] = True
-            dialog = FileInfoDialog(self, item)
+            dialog = self._open_file_info(item)
 
             def yt_worker():
                 info, err = None, None
@@ -252,6 +283,16 @@ class DracoApp(Adw.Application):
             threading.Thread(target=yt_worker, daemon=True).start()
             return
         if item["kind"] != "http":
+            self._file_info(item, None, req)
+            return
+        if req.get("_probe"):   # already checked while the browser was waiting
+            info = req["_probe"]
+            item.update(size=info["size"], resumable=info["resumable"], probed=True,
+                        final_url=info["final_url"], content_type=info["content_type"])
+            if not item["filename"]:
+                item["filename"] = info["filename"]
+            item["category"] = self.settings.category_for(item["filename"])
+            item["save_dir"] = str(self.settings.folder_for(item["category"]))
             self._file_info(item, None, req)
             return
 
@@ -282,8 +323,23 @@ class DracoApp(Adw.Application):
             if self.settings["show_progress_dialog"] and not req.get("silent"):
                 self.show_progress(item)
         else:
-            FileInfoDialog(self, item, err)
+            self._open_file_info(item, err)
         return False
+
+    def _open_file_info(self, item, err=None):
+        """At most one 'Download File Info' window per link: bring the existing one forward."""
+        dialogs = getattr(self, "_info_dialogs", None)
+        if dialogs is None:
+            dialogs = self._info_dialogs = {}
+        key = item["url"]
+        d = dialogs.get(key)
+        if d is not None and d.get_visible():
+            d.present()
+            return d
+        d = FileInfoDialog(self, item, err)
+        dialogs[key] = d
+        d.connect("close-request", lambda *_: (dialogs.pop(key, None), False)[1])
+        return d
 
     # ---------------------------------------------------------- windows
     def show_add_url(self, url=""):

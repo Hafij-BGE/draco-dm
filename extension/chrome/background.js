@@ -161,21 +161,29 @@ function shouldCapture(item) {
     !/^(application\/(json|xml|javascript)|text\/)/i.test(item.mime || "");
 }
 
+const recent = new Map();   // url -> time it was handed to Draco (sites that retry must not open many dialogs)
+
 chrome.downloads.onCreated.addListener(async (item) => {
   if (!shouldCapture(item)) return;
   const url = item.finalUrl || item.url;
-  try { await chrome.downloads.cancel(item.id); } catch (e) { /* already done */ }
-  try { await chrome.downloads.erase({ id: item.id }); } catch (e) { /* ignore */ }
+  const now = Date.now();
+  for (const [u, t] of recent) if (now - t > 60000) recent.delete(u);
+  if (recent.has(url)) return;          // same link again within a minute: leave it to the browser
+  recent.set(url, now);
+  // Pause (not cancel) first: some downloads (POST forms, one-time links such as Google Drive)
+  // can't be fetched again. Draco checks the link; only if it can download it do we cancel ours.
+  try { await chrome.downloads.pause(item.id); } catch (e) { /* not started yet */ }
   const reply = await sendToDraco(url, {
     referer: item.referrer || "", filename: (item.filename || "").split(/[\\/]/).pop(),
-    size: item.totalBytes > 0 ? item.totalBytes : undefined, silent: state.quick,
+    size: item.totalBytes > 0 ? item.totalBytes : undefined, silent: state.quick, verify: true,
   });
-  if (!reply.ok) {
-    // Draco not reachable: give the download back to the browser.
-    bypass.add(url);
-    chrome.downloads.download({ url });
-    setTimeout(() => bypass.delete(url), 60000);
-    console.warn("Draco unavailable:", reply.error);
+  if (reply.ok) {
+    try { await chrome.downloads.cancel(item.id); } catch (e) { /* already gone */ }
+    try { await chrome.downloads.erase({ id: item.id }); } catch (e) { /* ignore */ }
+  } else {
+    // Draco can't take it (not running, or the server refuses a second request): browser continues.
+    try { await chrome.downloads.resume(item.id); } catch (e) { /* ignore */ }
+    console.warn("Left to the browser:", reply.error);
   }
 });
 

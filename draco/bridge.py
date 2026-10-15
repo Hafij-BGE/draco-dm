@@ -18,7 +18,7 @@ import threading
 PORTS = range(47823, 47828)
 ALLOWED = {"ping", "add", "links", "show", "grab"}
 FIELDS = {"cmd", "url", "urls", "referer", "cookies", "filename", "size", "user_agent", "kind",
-          "content_type", "title", "description", "headers", "silent", "quality", "subs", "sub_lang"}
+          "content_type", "title", "description", "headers", "silent", "quality", "subs", "sub_lang", "verify"}
 MAX_BODY = 8 * 1024 * 1024
 LOOPBACK_HOSTS = {"127.0.0.1", "localhost"}
 

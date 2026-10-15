@@ -15,7 +15,7 @@ import time
 
 ALLOWED = {"ping", "add", "links", "show", "grab"}
 FIELDS = {"cmd", "url", "urls", "referer", "cookies", "filename", "size", "user_agent", "kind",
-          "content_type", "title", "description", "headers", "silent", "quality", "subs", "sub_lang"}
+          "content_type", "title", "description", "headers", "silent", "quality", "subs", "sub_lang", "verify"}
 LAUNCH = os.environ.get("DRACO_LAUNCH") or "@LAUNCH@"   # JSON list (or a plain path) filled in at install
 IS_WIN = os.name == "nt"
 if LAUNCH == "@LAUNCH@" and getattr(sys, "frozen", False):
@@ -67,10 +67,10 @@ def forward(msg):
         with open(os.path.join(runtime_dir(), "ipc.json")) as fh:   # OSError if Draco isn't running
             info = json.load(fh)
         msg = dict(msg, _token=info["token"])
-        s = socket.create_connection(("127.0.0.1", int(info["port"])), timeout=10)
+        s = socket.create_connection(("127.0.0.1", int(info["port"])), timeout=30)
     else:
         s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        s.settimeout(10)
+        s.settimeout(30)
         s.connect(socket_path())
     with s:
         s.sendall((json.dumps(msg) + "\n").encode())
