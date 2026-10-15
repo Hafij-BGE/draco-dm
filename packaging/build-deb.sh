@@ -9,7 +9,7 @@ APPID=io.github.draco.DracoDM
 
 rm -rf "$PKG"
 mkdir -p "$PKG/DEBIAN" "$PKG/usr/lib/draco" "$PKG/usr/bin" "$PKG/usr/share/applications" \
-         "$PKG/usr/share/doc/draco"
+         "$PKG/usr/share/doc/draco-dm"
 cp -r "$SRC/draco" "$SRC/native_host" "$SRC/extension" "$PKG/usr/lib/draco/"
 find "$PKG" -name __pycache__ -type d -prune -exec rm -rf {} +
 
@@ -24,8 +24,8 @@ sed "s|^Exec=draco|Exec=/usr/bin/draco|" "$SRC/data/$APPID.desktop" > "$PKG/usr/
 for s in 16 24 32 48 64 128 256 512; do
     install -Dm644 "$SRC/data/icons/$s.png" "$PKG/usr/share/icons/hicolor/${s}x${s}/apps/$APPID.png"
 done
-gzip -9n -c "$SRC/README.md" > "$PKG/usr/share/doc/draco/README.md.gz"
-cat > "$PKG/usr/share/doc/draco/copyright" <<'COPY'
+gzip -9n -c "$SRC/README.md" > "$PKG/usr/share/doc/draco-dm/README.md.gz"
+cat > "$PKG/usr/share/doc/draco-dm/copyright" <<'COPY'
 Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
 Upstream-Name: draco
 Files: *
