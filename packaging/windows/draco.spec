@@ -18,7 +18,7 @@ datas = [
 ]
 
 app = Analysis(  # noqa: F821
-    [str(ROOT / "bin" / "draco.pyw")],
+    [str(ROOT / "bin" / "draco-app.pyw")],
     pathex=[str(ROOT)],
     datas=datas,
     hiddenimports=["gi.repository.Adw", "gi.repository.Gtk", "gi.repository.Gdk", "gi.repository.Graphene",

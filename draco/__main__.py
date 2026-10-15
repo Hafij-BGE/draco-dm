@@ -27,7 +27,7 @@ def _launch_cmd():
             return [sys.executable]                     # ...\Draco\Draco.exe
         pythonw = Path(sys.executable).with_name("pythonw.exe")
         return [str(pythonw if pythonw.exists() else sys.executable),
-                str(Path(__file__).resolve().parent.parent / "bin" / "draco.pyw")]
+                str(Path(__file__).resolve().parent.parent / "bin" / "draco-app.pyw")]
     local = Path.home() / ".local/bin/draco"
     if local.exists():
         return [str(local)]
