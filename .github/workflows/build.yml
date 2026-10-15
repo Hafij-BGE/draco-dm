@@ -1,0 +1,171 @@
+# Builds every package. A push to main builds and tests; pushing a tag like v1.4.3 also
+# publishes all of them as a GitHub release (notes from docs/release-notes/<tag>.md).
+name: Build
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            mingw-w64-ucrt-x86_64-python
+            mingw-w64-ucrt-x86_64-python-gobject
+            mingw-w64-ucrt-x86_64-python-cairo
+            mingw-w64-ucrt-x86_64-python-pip
+            mingw-w64-ucrt-x86_64-gtk4
+            mingw-w64-ucrt-x86_64-libadwaita
+
+      - name: Install PyInstaller
+        run: python -m pip install --break-system-packages pyinstaller pyinstaller-hooks-contrib
+
+      - name: Test the download engine on Windows
+        run: python -m unittest tests.test_engine tests.test_bridge -v
+
+      - name: Self-test a console build (prints errors instead of showing dialogs)
+        run: |
+          DRACO_CONSOLE=1 python -m PyInstaller --noconfirm --distpath dist-debug --workpath build/pyinstaller-debug packaging/windows/draco.spec
+          timeout 180 ./dist-debug/Draco/Draco.exe --selftest
+
+      - name: Build Draco.exe and draco-host.exe
+        run: python -m PyInstaller --noconfirm --distpath dist --workpath build/pyinstaller packaging/windows/draco.spec
+
+      - name: Bundle yt-dlp and ffmpeg
+        shell: pwsh
+        run: |
+          Invoke-WebRequest "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe" -OutFile "dist/Draco/yt-dlp.exe"
+          Invoke-WebRequest "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip" -OutFile "ffmpeg.zip"
+          Expand-Archive "ffmpeg.zip" "ffmpeg" -Force
+          Copy-Item (Get-ChildItem "ffmpeg" -Recurse -Filter ffmpeg.exe | Select-Object -First 1).FullName "dist/Draco/"
+
+      - name: Build the installer
+        shell: pwsh
+        run: |
+          $version = (Select-String -Path draco/__init__.py -Pattern '__version__ = "(.+)"').Matches[0].Groups[1].Value
+          choco install innosetup -y --no-progress
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" "/DAppVersion=$version" packaging\windows\installer.iss
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: dist/DracoSetup-*.exe
+          if-no-files-found: error
+
+  linux:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tools
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq rpm desktop-file-utils
+      - name: Tests
+        run: python3 -m unittest tests.test_engine tests.test_bridge tests.test_windows_paths -v
+      - name: .deb, .rpm, .tar.gz, AppImage
+        run: |
+          sh packaging/linux/build-deb.sh
+          sh packaging/linux/build-rpm.sh
+          sh packaging/linux/build-tarball.sh
+          sh packaging/linux/build-appimage.sh
+      - name: Install the .deb and self-test it
+        run: |
+          sudo apt-get install -y -qq ./dist/draco-dm_*_all.deb
+          cd / && draco --selftest
+      - name: Self-test the AppImage
+        run: cd / && APPIMAGE_EXTRACT_AND_RUN=1 "$GITHUB_WORKSPACE"/dist/Draco-*-x86_64.AppImage --selftest
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: |
+            dist/*.deb
+            dist/*.rpm
+            dist/*.tar.gz
+            dist/*.AppImage
+          if-no-files-found: error
+
+  arch:
+    runs-on: ubuntu-24.04
+    container: archlinux:latest
+    steps:
+      - name: Tools
+        run: pacman -Syu --noconfirm --needed base-devel python git
+      - uses: actions/checkout@v4
+      - name: Build the Arch package
+        run: |
+          useradd -m builder
+          cp -r "$GITHUB_WORKSPACE" /home/builder/draco
+          chown -R builder /home/builder/draco
+          su builder -c "sh /home/builder/draco/packaging/linux/build-arch.sh"
+          mkdir -p dist && cp /home/builder/draco/dist/*.pkg.tar.zst dist/
+      - name: Install it and self-test
+        run: |
+          pacman -U --noconfirm dist/*.pkg.tar.zst
+          cd / && draco --selftest
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arch
+          path: dist/*.pkg.tar.zst
+          if-no-files-found: error
+
+  flatpak:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Tools
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq flatpak flatpak-builder
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          sh packaging/linux/fetch-tools.sh
+      - name: Build the Flatpak
+        run: |
+          flatpak-builder --user --install-deps-from=flathub --disable-rofiles-fuse --repo=repo \
+              --force-clean build-flatpak packaging/flatpak/io.github.draco.DracoDM.yml
+      - name: Self-test inside the sandbox
+        run: flatpak-builder --run build-flatpak packaging/flatpak/io.github.draco.DracoDM.yml draco --selftest
+      - name: Bundle
+        run: |
+          version=$(python3 -c "import draco; print(draco.__version__)")
+          mkdir -p dist
+          flatpak build-bundle repo "dist/Draco-$version-x86_64.flatpak" io.github.draco.DracoDM \
+              --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo
+      - uses: actions/upload-artifact@v4
+        with:
+          name: flatpak
+          path: dist/*.flatpak
+          if-no-files-found: error
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [windows, linux, arch, flatpak]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Browser extension zips and checksums
+        run: |
+          python3 packaging/extension-zips.py dist
+          cd dist && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          gh release create "$tag" --title "Draco Download Manager ${tag#v}" \
+              --notes-file "docs/release-notes/$tag.md" --latest dist/*

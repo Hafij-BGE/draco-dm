@@ -52,14 +52,23 @@ Tick **Include subtitles** in the video button's menu, in the extension popup, o
 
 The code runs on Windows 11 as well. To build `DracoSetup.exe` on a Windows PC, follow [packaging/windows/BUILD-WINDOWS.md](packaging/windows/BUILD-WINDOWS.md): two `winget` installs, then one build script.
 
-## Install from the .deb package (Debian, Ubuntu, Mint, Pop!_OS)
+## Download
+
+Ready-made packages for every system are on the [Releases page](https://github.com/Hafij-BGE/draco-dm/releases/latest): Windows 11 installer, `.deb` (Ubuntu/Debian), `.rpm` (Fedora), Arch package, Flatpak, AppImage and a portable `.tar.gz`. The release notes say which file to pick.
+
+### Building the packages yourself
 
 ```bash
-sh packaging/build-deb.sh                      # creates dist/draco-dm_<version>_all.deb
-sudo apt install ./dist/draco-dm_1.4.1_all.deb
+sh packaging/linux/build-deb.sh        # dist/draco-dm_<version>_all.deb
+sh packaging/linux/build-rpm.sh        # needs rpmbuild
+sh packaging/linux/build-arch.sh       # on Arch, needs makepkg
+sh packaging/linux/build-appimage.sh   # downloads appimagetool, yt-dlp, ffmpeg into build-cache/
+sh packaging/linux/build-tarball.sh
 ```
 
-`apt` installs the GTK dependencies, plus ffmpeg and yt-dlp as recommended packages. Start Draco once from the app menu; it registers the browser connection for your user by itself. Remove it with `sudo apt remove draco-dm`. (The package is called `draco-dm` because Ubuntu already has an unrelated package named `draco`.)
+The Flatpak recipe is `packaging/flatpak/io.github.draco.DracoDM.yml`, and the Windows build is described in `packaging/windows/BUILD-WINDOWS.md`. GitHub Actions (`.github/workflows/build.yml`) builds and self-tests all of them, and pushing a `v*` tag publishes a release.
+
+The Linux package is called `draco-dm` because Ubuntu already has an unrelated package named `draco`. The command is still `draco`.
 
 ## Install for your user only (no root)
 

@@ -1,0 +1,16 @@
+# Maintainer: Md Hafijur Rahman <draco@localhost>
+# Built by packaging/linux/build-arch.sh (DRACO_SRC points at the project folder).
+pkgname=draco-dm
+pkgver=1.4.3
+pkgrel=1
+pkgdesc="Fast multi-connection download manager with browser integration"
+arch=('any')
+url="https://github.com/Hafij-BGE/draco-dm"
+license=('GPL-3.0-or-later')
+depends=('python' 'python-gobject' 'gtk4' 'libadwaita')
+optdepends=('yt-dlp: YouTube and 1000+ video sites'
+            'ffmpeg: joining video+audio, HLS streams and subtitles')
+
+package() {
+    sh "$DRACO_SRC/packaging/linux/stage.sh" "$pkgdir" /usr
+}

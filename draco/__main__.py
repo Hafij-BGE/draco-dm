@@ -21,7 +21,10 @@ def _launch_cmd():
     from . import osdeps
     exe = os.environ.get("DRACO_LAUNCHER")
     if exe:
-        return [exe]
+        if osdeps.IS_WIN:
+            return [exe]
+        import shlex
+        return shlex.split(exe)     # may be a command, e.g. "flatpak run io.github.draco.DracoDM"
     if osdeps.IS_WIN:
         if osdeps.FROZEN:
             return [sys.executable]                     # ...\Draco\Draco.exe

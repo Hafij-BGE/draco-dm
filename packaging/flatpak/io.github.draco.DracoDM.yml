@@ -1,0 +1,39 @@
+# Flatpak recipe. Run packaging/linux/fetch-tools.sh first (puts yt-dlp + ffmpeg in build-cache/), then:
+#   flatpak-builder --user --install-deps-from=flathub --repo=repo --force-clean build-flatpak \
+#       packaging/flatpak/io.github.draco.DracoDM.yml
+id: io.github.draco.DracoDM
+runtime: org.gnome.Platform
+runtime-version: '51'
+sdk: org.gnome.Sdk
+command: draco
+finish-args:
+  - --share=network
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+  - --filesystem=xdg-download          # save downloads
+  - --filesystem=xdg-documents         # "Documents/Draco Browser Extension"
+  - --talk-name=org.freedesktop.FileManager1   # "Open folder" with the file selected
+modules:
+  - name: helper-tools
+    buildsystem: simple
+    build-commands:
+      - install -Dm755 yt-dlp /app/bin/yt-dlp
+      - install -Dm755 ffmpeg /app/bin/ffmpeg
+    sources:
+      - type: file
+        path: ../../build-cache/yt-dlp
+      - type: file
+        path: ../../build-cache/ffmpeg
+
+  - name: draco
+    buildsystem: simple
+    build-commands:
+      - sh packaging/linux/stage.sh / /app
+      # From outside the sandbox (browser helper, autostart), Draco is started through flatpak.
+      - sed -i 's|DRACO_LAUNCHER:-/app/bin/draco|DRACO_LAUNCHER:-flatpak run io.github.draco.DracoDM|' /app/bin/draco
+    sources:
+      - type: dir
+        path: ../..
+        skip: [dist, build-cache, build-flatpak, repo, .flatpak-builder, .git]

@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.draco.DracoDM</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+  <name>Draco Download Manager</name>
+  <summary>Fast multi-connection downloads with browser integration</summary>
+  <developer id="io.github.hafij-bge">
+    <name>Md Hafijur Rahman</name>
+  </developer>
+  <description>
+    <p>
+      Draco speeds up downloads by splitting files across up to 32 connections, resumes broken
+      downloads exactly where they stopped, and captures downloads and videos from your browser.
+    </p>
+    <ul>
+      <li>Pause, resume and crash recovery</li>
+      <li>Browser extension for Chrome, Edge, Brave, Opera, Vivaldi and Firefox</li>
+      <li>Video downloads with quality choice and subtitles (YouTube and 1000+ sites via yt-dlp)</li>
+      <li>Queues with a scheduler, site grabber, batch downloads and a speed limiter</li>
+      <li>14 themes, including a classic Windows-style look</li>
+    </ul>
+  </description>
+  <launchable type="desktop-id">io.github.draco.DracoDM.desktop</launchable>
+  <url type="homepage">https://github.com/Hafij-BGE/draco-dm</url>
+  <url type="bugtracker">https://github.com/Hafij-BGE/draco-dm/issues</url>
+  <content_rating type="oars-1.1"/>
+  <categories>
+    <category>Network</category>
+    <category>FileTransfer</category>
+  </categories>
+  <releases>
+    <release version="1.4.3" date="2026-10-15"/>
+  </releases>
+</component>
