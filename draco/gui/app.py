@@ -43,6 +43,10 @@ class DracoApp(Adw.Application):
         Adw.Application.do_startup(self)
         self.settings = Settings()
         theme = self.settings.get("theme") or ("classic" if self.settings.get("classic_look", True) else "system")
+        theme = style.current_theme(theme)
+        if theme != self.settings.get("theme"):
+            self.settings["theme"] = theme
+            self.settings.save()
         style.setup(theme)
         self.manager = Manager(self.settings)
         self.manager.listeners.append(self._on_event)

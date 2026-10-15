@@ -36,5 +36,8 @@ sh %{draco_src}/packaging/linux/stage.sh %{buildroot} %{_prefix}
 %{_datadir}/licenses/draco-dm
 
 %changelog
+* Thu Oct 15 2026 Md Hafijur Rahman <draco@localhost> - 1.4.4-1
+- Theme names no longer use other products' names
+
 * Thu Oct 15 2026 Md Hafijur Rahman <draco@localhost> - 1.4.3-1
 - Release 1.4.3

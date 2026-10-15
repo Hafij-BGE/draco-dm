@@ -42,7 +42,7 @@ Built with Python 3 and GTK4/libadwaita, using only the standard library. ffmpeg
 
 ## Themes
 
-**View → Theme** (or Preferences → General) switches instantly between: Follow desktop, Draco Classic, Retro Gray, Soft Light, Galaxy, Dark, Midnight Blue, Nightshade, Arctic Frost, Sand Light/Deep Teal, Forest, Sunset and High Contrast. Each theme brings matching icons (colourful, flat, monochrome or accent-coloured). You can override this under **View → Icon Style** or the palette button: *Match theme*, *Colourful*, *Flat*, *Monochrome*, *Accent colour*. To add your own theme, copy an entry in `draco/gui/style.py` (`THEMES`) and change its colours.
+**View → Theme** (or Preferences → General) switches instantly between: Follow desktop, Draco Classic, Retro Gray, Soft Light, Galaxy, Dark, Midnight Blue, Nightshade, Arctic Frost, Sand Light, Deep Teal, Forest, Sunset and High Contrast. Each theme brings matching icons (colourful, flat, monochrome or accent-coloured). You can override this under **View → Icon Style** or the palette button: *Match theme*, *Colourful*, *Flat*, *Monochrome*, *Accent colour*. To add your own theme, copy an entry in `draco/gui/style.py` (`THEMES`) and change its colours.
 
 ## Subtitles
 

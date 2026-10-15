@@ -30,6 +30,7 @@
     <category>FileTransfer</category>
   </categories>
   <releases>
+    <release version="1.4.4" date="2026-10-15"/>
     <release version="1.4.3" date="2026-10-15"/>
   </releases>
 </component>

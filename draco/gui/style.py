@@ -163,6 +163,9 @@ THEME_ICONS = {"system": "mono", "classic": "color", "retro": "color", "soft-lig
                "dark": "mono", "midnight": "accent", "nightshade": "accent", "arctic": "accent",
                "sand": "flat", "deep-teal": "accent", "forest": "flat", "sunset": "flat",
                "high-contrast": "mono"}
+def current_theme(key):
+    """A saved theme name, or Draco Classic if it no longer exists (themes were renamed in 1.4.4)."""
+    return key if key in THEMES else "classic"
 # Line icons for the monochrome/accent styles (GTK recolours them to match the theme).
 SYMBOLIC = {
     "add-url": "list-add-symbolic", "resume": "media-playback-start-symbolic",
