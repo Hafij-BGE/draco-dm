@@ -326,8 +326,9 @@ class DracoApp(Adw.Application):
         if not item.get("filename"):
             item["filename"] = util_name(item["url"], item.get("kind"))
         if (self.settings["start_immediately"] or req.get("silent")) and not err:
+            # Quick capture skips the confirmation dialog, not the progress window.
             self.manager.add(item, start=True)
-            if self.settings["show_progress_dialog"] and not req.get("silent"):
+            if self.settings["show_progress_dialog"]:
                 self.show_progress(item)
         else:
             self._open_file_info(item, err)
