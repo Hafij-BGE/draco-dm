@@ -1,0 +1,70 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  :root { --bg:#fafafa; --fg:#222; --muted:#666; --line:#ddd; --accent:#3584e4; --row:#fff; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#242428; --fg:#eee; --muted:#aaa; --line:#3a3a3e; --row:#2e2e33; }
+  }
+  body { margin:0; width:360px; font:13px system-ui,sans-serif; background:var(--bg); color:var(--fg); }
+  header { display:flex; align-items:center; gap:8px; padding:10px 12px; border-bottom:1px solid var(--line); }
+  header img { width:22px; height:22px; }
+  header b { flex:1; }
+  .status { font-size:11px; color:var(--muted); }
+  .status.ok { color:#26a269; }
+  .status.bad { color:#c01c28; }
+  section { padding:10px 12px; border-bottom:1px solid var(--line); }
+  h3 { margin:0 0 6px; font-size:12px; color:var(--muted); font-weight:600; text-transform:uppercase; }
+  label { display:flex; gap:8px; align-items:center; margin:4px 0; }
+  .media { max-height:220px; overflow:auto; }
+  .item { display:flex; gap:8px; align-items:center; padding:6px; background:var(--row); border:1px solid var(--line);
+          border-radius:6px; margin-bottom:6px; }
+  .item span { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; line-height:1.3; }
+  .item small { color:var(--muted); }
+  .tag { font-size:10px; background:var(--accent); color:#fff; border-radius:4px; padding:2px 5px; }
+  button { background:var(--accent); color:#fff; border:0; border-radius:5px; padding:5px 10px; cursor:pointer; font:inherit; }
+  button.flat { background:transparent; color:var(--accent); border:1px solid var(--line); }
+  .empty { color:var(--muted); font-size:12px; }
+  textarea { width:100%; box-sizing:border-box; height:56px; font:11px monospace; background:var(--row); color:var(--fg);
+             border:1px solid var(--line); border-radius:4px; }
+  .row { display:flex; gap:6px; flex-wrap:wrap; }
+</style>
+</head>
+<body>
+<header>
+  <img src="icons/32.png" alt="">
+  <b>Draco Download Manager</b>
+  <span id="status" class="status">checking…</span>
+</header>
+<section id="pairbox" hidden>
+  <div class="empty" id="pairmsg">This browser can't start Draco by itself (snap/flatpak). Connect it once:</div>
+  <div class="row" style="margin-top:6px"><button id="pair">Connect to Draco</button></div>
+</section>
+<section>
+  <label><input type="checkbox" id="capture"> Send browser downloads to Draco</label>
+  <label><input type="checkbox" id="quick"> Quick capture: start downloads instantly (no dialog)</label>
+  <label><input type="checkbox" id="subs"> Include subtitles when downloading videos</label>
+  <div class="row" style="margin-top:6px">
+    <button id="quicknow">⚡ Quick capture this page</button>
+    <span class="empty" style="align-self:center">Shortcut: Alt+Shift+D</span>
+  </div>
+</section>
+<section>
+  <h3>Media on this page</h3>
+  <div id="media" class="media"><div class="empty">Play a video to detect it.</div></div>
+  <div class="row">
+    <button id="ytdlp" class="flat">Download page video with yt-dlp</button>
+    <button id="show" class="flat">Open Draco</button>
+  </div>
+</section>
+<section>
+  <h3>File types to capture</h3>
+  <textarea id="exts"></textarea>
+  <label>Skip files smaller than <input type="number" id="minkb" min="0" style="width:70px"> KB</label>
+</section>
+<footer style="padding:6px 12px;font-size:11px;color:var(--muted);text-align:center">Draco Download Manager · by Md Hafijur Rahman</footer>
+<script src="mediaui.js"></script>
+<script src="popup.js"></script>
+</body>
+</html>

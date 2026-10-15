@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><defs>
+<linearGradient id="blue" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#62a0ea"/><stop offset="1" stop-color="#1a5fb4"/></linearGradient>
+<linearGradient id="green" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8ff0a4"/><stop offset="1" stop-color="#26a269"/></linearGradient>
+<linearGradient id="red" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f66151"/><stop offset="1" stop-color="#a51d2d"/></linearGradient>
+<linearGradient id="orange" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffbe6f"/><stop offset="1" stop-color="#e66100"/></linearGradient>
+<linearGradient id="gray" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#deddda"/><stop offset="1" stop-color="#77767b"/></linearGradient>
+<linearGradient id="folder" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffe16b"/><stop offset="1" stop-color="#f5c211"/></linearGradient>
+<linearGradient id="folderback" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f6d32d"/><stop offset="1" stop-color="#c88800"/></linearGradient>
+<linearGradient id="paper" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#deddda"/></linearGradient>
+<linearGradient id="purple" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#dc8add"/><stop offset="1" stop-color="#813d9c"/></linearGradient>
+</defs><rect x="10" y="3" width="17" height="20" rx="1.5" fill="#ffffff" stroke="#77767b" stroke-width="0.8"/><rect x="7" y="6" width="17" height="20" rx="1.5" fill="#ffffff" stroke="#77767b" stroke-width="0.8"/><rect x="4" y="9" width="17" height="20" rx="1.5" fill="#ffffff" stroke="#77767b" stroke-width="0.8"/><path d="M7 14h11M7 18h11M7 22h8" stroke="#62a0ea" stroke-width="1.6"/><circle cx="24" cy="24" r="6.5" fill="#3584e4" stroke="#fff" stroke-width="1.4"/><path d="M24 20.5v6M21 24l3 3 3-3" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>

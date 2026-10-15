@@ -1,0 +1,60 @@
+{
+  "manifest_version": 3,
+  "name": "Draco Download Manager Integration",
+  "short_name": "Draco",
+  "version": "1.4.2",
+  "description": "Sends downloads, videos and links to Draco Download Manager for fast multi-connection downloading.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA28uqV1ew75j5jKHVb6DSTCYk6BZ2+cP8bV+v073JupBD6X0fhW2wOCQfREtpUIG5/OpjROGNIE0InJ6+e+ZJffdmIs8VqdcUQkVGtLLEp3b2VLYaCx6btIXKM87oHjvEzUxyD+4MHQI+j24gfSPFGUxKMl50IneTXl8DXeoeZuiJUAMO5NGyHN6UdjmfpCEAC03AzT7wbrFUF8sZ5F9UkJo7Ey+c9TWi/PlZZ7+onqD6ZvLoaps/hfpbmSs2uUxZuTC2irSgKQEg76Wx2j7SI8Quq+gMgcbVZXeRf5cW54OVZHOIXPi74+ETJFB5+K26gree1la5+mSvy5LGjE7RfQIDAQAB",
+  "permissions": [
+    "downloads",
+    "nativeMessaging",
+    "contextMenus",
+    "cookies",
+    "webRequest",
+    "storage",
+    "tabs"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Draco Download Manager",
+    "default_icon": {
+      "16": "icons/16.png",
+      "32": "icons/32.png",
+      "48": "icons/48.png"
+    }
+  },
+  "icons": {
+    "16": "icons/16.png",
+    "32": "icons/32.png",
+    "48": "icons/48.png",
+    "128": "icons/128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "http://*/*",
+        "https://*/*"
+      ],
+      "js": [
+        "mediaui.js",
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "commands": {
+    "quick-capture": {
+      "suggested_key": {
+        "default": "Alt+Shift+D"
+      },
+      "description": "Quick capture: download this page's video now (no dialog)"
+    }
+  },
+  "author": "Md Hafijur Rahman"
+}

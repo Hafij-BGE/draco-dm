@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=Draco Download Manager
+GenericName=Download Manager
+Comment=Fast multi-connection downloads with browser integration
+Exec=draco %U
+Icon=io.github.draco.DracoDM
+Terminal=false
+Categories=Network;FileTransfer;GTK;
+Keywords=download;manager;accelerator;video;grabber;
+StartupNotify=true
+StartupWMClass=io.github.draco.DracoDM
