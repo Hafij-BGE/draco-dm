@@ -127,6 +127,9 @@ class DracoApp(Adw.Application):
         if not self.window:
             self.window = MainWindow(self)
             self._setup_clipboard()
+            self.window.connect("notify::is-active",
+                                lambda w, _p: w.is_active() and self.clear_notifications())
+            GLib.idle_add(self._clear_old_notifications)
         if not self.start_hidden:
             self.window.present()
         self.start_hidden = False
@@ -387,9 +390,7 @@ class DracoApp(Adw.Application):
         if event == "finished" and payload["status"] == "complete":
             it = payload
             if self.settings["notify"]:
-                n = Gio.Notification.new("Download complete")
-                n.set_body(it["filename"])
-                self.send_notification(f"done-{it['id']}", n)
+                self._notify_grouped("done", it["filename"])
             if self.settings["sound"]:
                 util.play_complete_sound()
             od = it.get("on_done") or {}
@@ -406,9 +407,7 @@ class DracoApp(Adw.Application):
                   and not od.get("open")):
                 CompleteDialog(self, it)
         elif event == "finished" and payload["status"] == "error" and self.settings["notify"]:
-            n = Gio.Notification.new("Download failed")
-            n.set_body(f"{payload.get('filename') or payload['url']}\n{payload.get('error', '')}")
-            self.send_notification(f"err-{payload['id']}", n)
+            self._notify_grouped("failed", f"{payload.get('filename') or payload['url']}: {payload.get('error', '')}")
         elif event == "queue_done":
             self._after_queue(payload or {})
         elif event == "scanned" and payload.get("scan", "").startswith("flagged"):
@@ -416,6 +415,39 @@ class DracoApp(Adw.Application):
             n.set_body(f"{payload['filename']}: {payload['scan']}")
             n.set_priority(Gio.NotificationPriority.URGENT)
             self.send_notification(f"scan-{payload['id']}", n)
+        return False
+
+    # ---------------------------------------------------------- notifications
+    # One notification per kind that updates itself ("3 downloads complete"), instead of one per file.
+    # They are cleared as soon as the Draco window is looked at, so the dock badge never piles up.
+    _NOTE_IDS = ("done", "failed", "queue-done", "background")
+
+    def _notify_grouped(self, kind, line):
+        pending = self.__dict__.setdefault("_pending_notes", {"done": [], "failed": []})
+        if self.window and self.window.is_active():
+            return  # the user is looking at the list already
+        pending[kind].append(line)
+        lines = pending[kind]
+        if kind == "done":
+            title = "Download complete" if len(lines) == 1 else f"{len(lines)} downloads complete"
+        else:
+            title = "Download failed" if len(lines) == 1 else f"{len(lines)} downloads failed"
+        n = Gio.Notification.new(title)
+        n.set_body("\n".join(lines[-3:]) + (f"\n…and {len(lines) - 3} more" if len(lines) > 3 else ""))
+        n.set_default_action("app.show")
+        self.send_notification(kind, n)
+
+    def clear_notifications(self, *_):
+        for nid in self._NOTE_IDS:
+            self.withdraw_notification(nid)
+        self.__dict__["_pending_notes"] = {"done": [], "failed": []}
+
+    def _clear_old_notifications(self):
+        """Older versions posted one notification per download; withdraw any that are still listed."""
+        self.clear_notifications()
+        for item_id in list(self.manager.items):
+            for prefix in ("done-", "err-"):
+                self.withdraw_notification(prefix + item_id)
         return False
 
     def _after_queue(self, conf):
