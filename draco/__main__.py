@@ -34,6 +34,46 @@ def _launch_cmd():
     return [str(Path(__file__).resolve().parent.parent / "bin" / "draco")]
 
 
+def _selftest():
+    """Check that a (frozen) install can load everything it needs. Prints a report, exit code 0 = OK."""
+    import traceback
+    from . import osdeps
+    ok = True
+
+    def check(name, fn):
+        nonlocal ok
+        try:
+            detail = fn()
+            print(f"  ok    {name}" + (f": {detail}" if detail else ""))
+        except Exception:
+            ok = False
+            print(f"  FAIL  {name}")
+            traceback.print_exc()
+
+    print(f"Draco {__version__} selftest (frozen={osdeps.FROZEN}, app_dir={osdeps.app_dir()})")
+    base = Path(__file__).resolve().parent.parent
+    check("icons", lambda: f"{len(list((base / 'draco' / 'icons').glob('*.svg')))} svg")
+    check("extension files", lambda: (base / "extension" / "chrome" / "manifest.json").stat().st_size and "present")
+    check("native host script", lambda: (base / "native_host" / "draco_host.py").stat().st_size and "present")
+    check("folders", lambda: f"config={osdeps.config_dir()} downloads={osdeps.downloads_dir()}")
+
+    def gtk():
+        import gi
+        gi.require_version("Gtk", "4.0")
+        gi.require_version("Adw", "1")
+        gi.require_version("Graphene", "1.0")
+        from gi.repository import Adw, Gtk
+        return f"GTK {Gtk.get_major_version()}.{Gtk.get_minor_version()}.{Gtk.get_micro_version()}, " \
+               f"libadwaita {Adw.get_major_version()}.{Adw.get_minor_version()}, display={Gtk.init_check()}"
+    check("GTK 4 + libadwaita", gtk)
+    check("themes", lambda: (__import__("draco.gui.style", fromlist=["x"]).css_for("retro") and "css ok"))
+    check("GUI modules", lambda: __import__("draco.gui.app", fromlist=["x"]) and "import ok")
+    check("yt-dlp", lambda: osdeps.which("yt-dlp") or "not found (optional)")
+    check("ffmpeg", lambda: osdeps.which("ffmpeg") or "not found (optional)")
+    print("SELFTEST OK" if ok else "SELFTEST FAILED")
+    return 0 if ok else 1
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="draco", description="Draco Download Manager")
     ap.add_argument("urls", nargs="*", help="addresses to download")
@@ -44,7 +84,11 @@ def main(argv=None):
     ap.add_argument("--uninstall-browser", action="store_true")
     ap.add_argument("--status", action="store_true")
     ap.add_argument("--version", action="version", version=f"draco {__version__}")
+    ap.add_argument("--selftest", action="store_true", help="check the installation and exit")
     args = ap.parse_args(argv)
+
+    if args.selftest:
+        return _selftest()
 
     if args.install_browser:
         from . import native

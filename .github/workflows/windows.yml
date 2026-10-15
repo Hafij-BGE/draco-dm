@@ -35,11 +35,13 @@ jobs:
       - name: Test the download engine on Windows
         run: python -m unittest tests.test_engine tests.test_bridge -v
 
+      - name: Self-test a console build (prints errors instead of showing dialogs)
+        run: |
+          DRACO_CONSOLE=1 python -m PyInstaller --noconfirm --distpath dist-debug --workpath build/pyinstaller-debug packaging/windows/draco.spec
+          timeout 180 ./dist-debug/Draco/Draco.exe --selftest
+
       - name: Build Draco.exe and draco-host.exe
         run: python -m PyInstaller --noconfirm --distpath dist --workpath build/pyinstaller packaging/windows/draco.spec
-
-      - name: Smoke test (app imports and reports its version)
-        run: ./dist/Draco/Draco.exe --version || true
 
       - name: Bundle yt-dlp and ffmpeg
         shell: pwsh

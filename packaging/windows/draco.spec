@@ -36,7 +36,9 @@ app_exe = EXE(  # noqa: F821
     PYZ(app.pure),  # noqa: F821
     app.scripts, [], exclude_binaries=True,
     name="Draco", icon=str(ROOT / "data" / "draco.ico"),
-    console=False,                 # GUI app: no console window
+    # GUI app: no console window. DRACO_CONSOLE=1 builds a console variant used by CI for --selftest,
+    # so errors are printed instead of shown in a dialog nobody can click.
+    console=os.environ.get("DRACO_CONSOLE") == "1",
     version=None,
 )
 host_exe = EXE(  # noqa: F821
