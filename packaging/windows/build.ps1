@@ -8,6 +8,7 @@ $root  = Resolve-Path "$PSScriptRoot\..\.."
 $msys  = "C:\msys64"
 $bash  = "$msys\usr\bin\bash.exe"
 $iscc  = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+if (-not (Test-Path $iscc)) { $iscc = "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe" }   # per-user winget install
 
 if (-not (Test-Path $bash)) { throw "MSYS2 not found at $msys. Install it: winget install MSYS2.MSYS2" }
 if (-not (Test-Path $iscc)) { throw "Inno Setup 6 not found. Install it: winget install JRSoftware.InnoSetup" }
