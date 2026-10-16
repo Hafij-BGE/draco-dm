@@ -77,6 +77,20 @@ def _selftest():
     return 0 if ok else 1
 
 
+_instance_mutex = None
+
+
+def _win_claim_instance():
+    """Windows: claim a named mutex, which is atomic. False if another Draco holds it, even one
+    that is still starting up and not answering pings yet (loading GTK takes a while)."""
+    global _instance_mutex
+    import ctypes
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.CreateMutexW.restype = ctypes.c_void_p
+    _instance_mutex = kernel32.CreateMutexW(None, False, r"Local\DracoDM-instance")
+    return ctypes.get_last_error() != 183   # ERROR_ALREADY_EXISTS
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="draco", description="Draco Download Manager")
     ap.add_argument("urls", nargs="*", help="addresses to download")
@@ -109,6 +123,15 @@ def main(argv=None):
         return 0
 
     msgs = [{"cmd": "add", "url": u, "referer": args.referer, "silent": args.now} for u in args.urls]
+    from . import osdeps
+    if osdeps.IS_WIN and not args.status and not _win_claim_instance():
+        import time
+        for _ in range(120):            # the other copy is starting: wait for it, then hand over
+            if ipc.ping():
+                break
+            time.sleep(0.5)
+        else:
+            return 1
     if ipc.ping():
         if args.status:
             print(ipc.send({"cmd": "status"}))
