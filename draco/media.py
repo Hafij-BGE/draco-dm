@@ -28,6 +28,18 @@ YTDLP_TRANSIENT = re.compile(r"page needs to be reloaded|confirm you.re not a bo
 YTDLP_RETRY_WAIT = (5, 20, 45)    # seconds before the 2nd, 3rd and 4th try
 
 _js_args = None
+_YOUTUBE = re.compile(r"(^|\.)(youtube\.com|youtu\.be|youtube-nocookie\.com)$", re.I)
+
+
+def ytdlp_cookie_args(url, cookies):
+    """Browser cookies for yt-dlp, except for YouTube.
+
+    yt-dlp cannot sign YouTube's logged-in requests from a plain Cookie header, so YouTube
+    answers every one of them with "The page needs to be reloaded"; without cookies it works."""
+    host = (urllib.parse.urlsplit(url).hostname or "")
+    if not cookies or _YOUTUBE.search(host):
+        return []
+    return ["--add-header", "Cookie:" + cookies]
 
 
 def ytdlp_js_args():
@@ -379,11 +391,13 @@ def ytdlp_info(url, cookies="", referer="", timeout=45):
     cmd = [YTDLP, "-J", "--no-playlist", "--no-warnings", "--no-colors"] + ytdlp_js_args()
     if referer:
         cmd += ["--referer", referer]
-    if cookies:
-        cmd += ["--add-header", "Cookie:" + cookies]
-    cmd.append(url)
+    cookie_args = ytdlp_cookie_args(url, cookies)
     try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout, **popen_kwargs())
+        r = subprocess.run(cmd + cookie_args + ["--", url], capture_output=True, text=True, timeout=timeout,
+                           **popen_kwargs())
+        if r.returncode != 0 and cookie_args:   # the site may reject the browser's session: try without it
+            r = subprocess.run(cmd + ["--", url], capture_output=True, text=True, timeout=timeout,
+                               **popen_kwargs())
     except subprocess.TimeoutExpired as e:
         raise DownloadError("yt-dlp took too long to read the page") from e
     if r.returncode != 0:
@@ -434,6 +448,7 @@ class YtdlpTask(_TaskBase):
     """
 
     kind = "ytdlp"
+    _no_cookies = False   # set after the site rejected the browser's cookies
 
     def _common(self):
         it = self.item
@@ -442,8 +457,8 @@ class YtdlpTask(_TaskBase):
                "--print", "video:DRACONAME %(title).180B"] + ytdlp_js_args()
         if it.get("referer"):
             cmd += ["--referer", it["referer"]]
-        if it.get("cookies"):
-            cmd += ["--add-header", "Cookie:" + it["cookies"]]
+        if not self._no_cookies:
+            cmd += ytdlp_cookie_args(it["url"], it.get("cookies"))
         if self.settings["proxy"]:
             cmd += ["--proxy", self.settings["proxy"]]
         return cmd
@@ -474,20 +489,30 @@ class YtdlpTask(_TaskBase):
 
         tmpl = ("DRACO %(progress.downloaded_bytes)s %(progress.total_bytes)s "
                 "%(progress.total_bytes_estimate)s %(progress.speed)s")
-        cmd = self._common() + ["--newline", "--progress", "-N", str(min(8, int(self.settings["connections"]))),
-                                "--progress-template", "download:" + tmpl,
-                                "--print", "after_move:DRACOFILE %(filepath)s"]
-        cmd += ytdlp_args_for_quality(quality)
-        limit = it.get("speed_limit_kbps") or self.settings["speed_limit_kbps"]
-        if limit:
-            cmd += ["-r", f"{int(limit)}K"]
-        cmd += ["--", it["url"]]
+
+        def command():
+            cmd = self._common() + ["--newline", "--progress", "-N", str(min(8, int(self.settings["connections"]))),
+                                    "--progress-template", "download:" + tmpl,
+                                    "--print", "after_move:DRACOFILE %(filepath)s"]
+            cmd += ytdlp_args_for_quality(quality)
+            limit = it.get("speed_limit_kbps") or self.settings["speed_limit_kbps"]
+            if limit:
+                cmd += ["-r", f"{int(limit)}K"]
+            return cmd + ["--", it["url"]]
+
         for attempt in range(len(YTDLP_RETRY_WAIT) + 1):
-            rc, last_err = self._download(cmd, quality)
+            rc, last_err = self._download(command(), quality)
             if self.stop_event.is_set():
                 return False
             if rc == 0:
                 break
+            if not self._no_cookies and ytdlp_cookie_args(it["url"], it.get("cookies")):
+                self._no_cookies = True    # the site rejected the browser's session: retry right away without it
+                rc, last_err = self._download(command(), quality)
+                if self.stop_event.is_set():
+                    return False
+                if rc == 0:
+                    break
             if attempt == len(YTDLP_RETRY_WAIT) or not YTDLP_TRANSIENT.search(last_err):
                 it["error"] = last_err[:300] or "yt-dlp failed"
                 return False
@@ -570,9 +595,11 @@ class YtdlpTask(_TaskBase):
             if self.stop_event.is_set():
                 break
         self.proc.wait()
-        stem = sanitize_filename(it.get("_ytdlp_title") or Path(it.get("filename") or "").stem)
-        found = list(Path(it["save_dir"]).glob(f"{glob_escape(stem)}*.srt"))
-        new = [p for p in found if p.name not in before] or found   # already downloaded earlier counts too
+        folder = Path(it["save_dir"])
+        new = [p for p in folder.glob("*.srt") if p.name not in before]
+        if not new:   # already downloaded earlier: match by name (yt-dlp's own file name first)
+            stems = {Path(it.get("filename") or "").stem, sanitize_filename(it.get("_ytdlp_title") or "")} - {""}
+            new = [p for stem in stems for p in folder.glob(f"{glob_escape(stem)}*.srt")]
         if not new and err:
             it["error"] = err[:300]
         return sorted(new, key=lambda p: p.stat().st_mtime, reverse=True)

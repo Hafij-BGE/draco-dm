@@ -17,6 +17,9 @@ from pathlib import Path
 state = Path(os.environ["FAKE_STATE"])
 n = int(state.read_text()) if state.exists() else 0
 state.write_text(str(n + 1))
+if os.environ.get("FAIL_WITH_COOKIES") and any(a.startswith("Cookie:") for a in sys.argv):
+    print("ERROR: [site] abc: HTTP Error 401: Unauthorized")
+    sys.exit(1)
 if n < int(os.environ["FAIL_TIMES"]):
     print("ERROR: [youtube] abc: " + os.environ["FAIL_MSG"])
     sys.exit(1)
@@ -45,9 +48,9 @@ class YtdlpRetryTest(unittest.TestCase):
         media.YTDLP, media.YTDLP_RETRY_WAIT, media._js_args = self._saved
         self.tmp.cleanup()
 
-    def run_task(self, fail_times, msg):
+    def run_task(self, fail_times, msg, url="https://www.youtube.com/watch?v=abc", cookies=""):
         os.environ["FAIL_TIMES"], os.environ["FAIL_MSG"] = str(fail_times), msg
-        item = {"url": "https://www.youtube.com/watch?v=abc", "save_dir": self.tmp.name, "filename": "",
+        item = {"url": url, "save_dir": self.tmp.name, "filename": "", "cookies": cookies,
                 "kind": "ytdlp", "ytdlp_quality": "720", "downloaded": 0, "size": -1}
         task = media.YtdlpTask(item, self.settings, None)
         return item, task._run()
@@ -68,6 +71,22 @@ class YtdlpRetryTest(unittest.TestCase):
         item, ok = self.run_task(10, "Video unavailable. This video is private")
         self.assertFalse(ok)
         self.assertEqual(self.state.read_text(), "1")
+
+
+    def test_youtube_never_gets_browser_cookies(self):
+        self.assertEqual(media.ytdlp_cookie_args("https://www.youtube.com/watch?v=abc", "SID=1"), [])
+        self.assertEqual(media.ytdlp_cookie_args("https://youtu.be/abc", "SID=1"), [])
+        self.assertEqual(media.ytdlp_cookie_args("https://m.youtube.com/watch?v=abc", "SID=1"), [])
+        self.assertEqual(media.ytdlp_cookie_args("https://vimeo.com/1", "a=1"), ["--add-header", "Cookie:a=1"])
+
+    def test_other_site_retries_without_cookies(self):
+        os.environ["FAIL_WITH_COOKIES"] = "1"
+        try:
+            item, ok = self.run_task(0, "", url="https://vimeo.com/1", cookies="a=1")
+        finally:
+            del os.environ["FAIL_WITH_COOKIES"]
+        self.assertTrue(ok)
+        self.assertEqual(self.state.read_text(), "2")
 
 
 if __name__ == "__main__":
