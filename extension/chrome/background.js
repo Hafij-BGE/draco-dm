@@ -163,8 +163,19 @@ function shouldCapture(item) {
 
 const recent = new Map();   // url -> time it was handed to Draco (sites that retry must not open many dialogs)
 
+// Windows: when the browser starts it loads its download history and fires onCreated for those
+// old entries too. Only a download that is running and began just now is a new one.
+const onWindows = new Promise((done) => chrome.runtime.getPlatformInfo((info) => done(info.os === "win")));
+
+async function isNewDownload(item) {
+  if (!(await onWindows)) return true;
+  if (item.state !== "in_progress") return false;
+  const started = Date.parse(item.startTime || "");
+  return !started || Date.now() - started < 30000;
+}
+
 chrome.downloads.onCreated.addListener(async (item) => {
-  if (!shouldCapture(item)) return;
+  if (!(await isNewDownload(item)) || !shouldCapture(item)) return;
   const url = item.finalUrl || item.url;
   const now = Date.now();
   for (const [u, t] of recent) if (now - t > 60000) recent.delete(u);

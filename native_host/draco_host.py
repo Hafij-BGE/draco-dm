@@ -83,11 +83,47 @@ def forward(msg):
     return json.loads(buf or b"{}")
 
 
+class win_launch_lock:
+    """Windows: only one helper at a time may start Draco. The browser runs a helper per message,
+    so when it hands over several downloads at once each would otherwise start its own copy."""
+
+    def __enter__(self):
+        os.makedirs(runtime_dir(), exist_ok=True)
+        self.fh = open(os.path.join(runtime_dir(), "launch.lock"), "a+")
+        for _ in range(3):   # LK_LOCK gives up after about 10 s
+            try:
+                self.fh.seek(0)
+                msvcrt.locking(self.fh.fileno(), msvcrt.LK_LOCK, 1)
+                break
+            except OSError:
+                continue
+        return self
+
+    def __exit__(self, *exc):
+        try:
+            self.fh.seek(0)
+            msvcrt.locking(self.fh.fileno(), msvcrt.LK_UNLCK, 1)
+        except OSError:
+            pass
+        self.fh.close()
+
+
 def ensure_running():
     try:
         return forward({"cmd": "ping"})
     except (OSError, KeyError, ValueError):
         pass
+    if not IS_WIN:
+        return launch()
+    with win_launch_lock():
+        try:   # another helper may have started it while this one waited
+            return forward({"cmd": "ping"})
+        except (OSError, KeyError, ValueError):
+            pass
+        return launch()
+
+
+def launch():
     cmd = launch_cmd() + ["--background"]
     if IS_WIN:
         flags = 0x00000008 | 0x00000200   # DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP
