@@ -19,6 +19,37 @@ FFMPEG = which("ffmpeg")
 HAS_FFMPEG = FFMPEG is not None
 YTDLP = which("yt-dlp") or which("yt_dlp")
 
+# YouTube answers a burst of parallel requests with "The page needs to be reloaded" / bot checks,
+# so only a couple of yt-dlp downloads talk to it at the same time; the rest wait their turn.
+YTDLP_SLOTS = threading.Semaphore(2)
+YTDLP_TRANSIENT = re.compile(r"page needs to be reloaded|confirm you.re not a bot|HTTP Error (403|429|5\d\d)|"
+                             r"timed? ?out|Connection reset|Temporary failure|Unable to download (API|webpage)|"
+                             r"Remote end closed|IncompleteRead", re.I)
+YTDLP_RETRY_WAIT = (5, 20, 45)    # seconds before the 2nd, 3rd and 4th try
+
+_js_args = None
+
+
+def ytdlp_js_args():
+    """yt-dlp needs a JavaScript runtime for YouTube; it only looks for deno by itself.
+
+    When deno is missing but node or bun is installed, point yt-dlp at that one (only if this
+    yt-dlp is new enough to know the --js-runtimes option)."""
+    global _js_args
+    if _js_args is None:
+        _js_args = []
+        if YTDLP and not which("deno"):
+            runtime = next((n for n in ("node", "bun") if which(n)), None)
+            if runtime:
+                try:
+                    out = subprocess.run([YTDLP, "--help"], capture_output=True, text=True, timeout=30,
+                                         **popen_kwargs()).stdout
+                except (OSError, subprocess.SubprocessError):
+                    out = ""
+                if "--js-runtimes" in out:
+                    _js_args = ["--js-runtimes", runtime]
+    return list(_js_args)
+
 
 def is_hls(url, content_type=""):
     path = urllib.parse.urlparse(url).path.lower()
@@ -345,7 +376,7 @@ def ytdlp_info(url, cookies="", referer="", timeout=45):
     import json
     if not YTDLP:
         raise DownloadError("yt-dlp is not installed")
-    cmd = [YTDLP, "-J", "--no-playlist", "--no-warnings", "--no-colors"]
+    cmd = [YTDLP, "-J", "--no-playlist", "--no-warnings", "--no-colors"] + ytdlp_js_args()
     if referer:
         cmd += ["--referer", referer]
     if cookies:
@@ -408,7 +439,7 @@ class YtdlpTask(_TaskBase):
         it = self.item
         cmd = [YTDLP, "--no-playlist", "--no-colors", "--no-simulate",
                "-P", it["save_dir"], "-o", it.get("ytdlp_template") or "%(title).180B.%(ext)s",
-               "--print", "video:DRACONAME %(title).180B"]
+               "--print", "video:DRACONAME %(title).180B"] + ytdlp_js_args()
         if it.get("referer"):
             cmd += ["--referer", it["referer"]]
         if it.get("cookies"):
@@ -451,45 +482,19 @@ class YtdlpTask(_TaskBase):
         if limit:
             cmd += ["-r", f"{int(limit)}K"]
         cmd += ["--", it["url"]]
-        self._set(status="downloading", size=-1)
-        self.proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
-                                     encoding="utf-8", errors="replace", **popen_kwargs())
-        last_err = ""
-        base, last_done, last_total = 0, 0, 0   # video and audio arrive as two files: add them up
-
-        def num(v):
-            try:
-                return float(v)
-            except ValueError:
-                return 0.0
-
-        for line in self.proc.stdout:
-            line = line.strip()
-            if line.startswith("DRACO "):
-                p = line.split()
-                done, tot = num(p[1]), num(p[2]) or num(p[3])
-                if last_done and done < last_done * 0.5:   # next stream started
-                    base += last_total or last_done
-                last_done, last_total = done, tot
-                it["downloaded"] = int(base + done)
-                it["size"] = int(base + tot) if tot else -1
-                self.speed = it["speed"] = num(p[4])
-                self.on_update(it)
-            elif line.startswith("DRACONAME "):
-                self._name(line, ".mp3" if quality == "audio" else ".mp4")
-            elif line.startswith("DRACOFILE "):
-                path = Path(line[10:])
-                it["save_dir"], it["filename"] = str(path.parent), path.name
-            elif "ERROR" in line:
-                last_err = line
+        for attempt in range(len(YTDLP_RETRY_WAIT) + 1):
+            rc, last_err = self._download(cmd, quality)
             if self.stop_event.is_set():
+                return False
+            if rc == 0:
                 break
-        self.proc.wait()
-        if self.stop_event.is_set():
-            return False
-        if self.proc.returncode != 0:
-            it["error"] = last_err[:300] or "yt-dlp failed"
-            return False
+            if attempt == len(YTDLP_RETRY_WAIT) or not YTDLP_TRANSIENT.search(last_err):
+                it["error"] = last_err[:300] or "yt-dlp failed"
+                return False
+            # YouTube pushed back: wait a little, then try again (yt-dlp continues its .part files)
+            self._set(status="connecting", speed=0)
+            if self.stop_event.wait(YTDLP_RETRY_WAIT[attempt]):
+                return False
         video = Path(it["save_dir"]) / it["filename"]
         if it.get("subs"):
             self._set(status="merging", speed=0)
@@ -500,6 +505,51 @@ class YtdlpTask(_TaskBase):
         if video.exists():
             it["size"] = it["downloaded"] = video.stat().st_size
         return True
+
+    def _download(self, cmd, quality):
+        """One yt-dlp run; returns (exit code, last error line)."""
+        it = self.item
+        while not YTDLP_SLOTS.acquire(timeout=0.5):
+            if self.stop_event.is_set():
+                return 1, ""
+        try:
+            self._set(status="downloading", size=-1)
+            self.proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                                         encoding="utf-8", errors="replace", **popen_kwargs())
+            last_err = ""
+            base, last_done, last_total = 0, 0, 0   # video and audio arrive as two files: add them up
+
+            def num(v):
+                try:
+                    return float(v)
+                except ValueError:
+                    return 0.0
+
+            for line in self.proc.stdout:
+                line = line.strip()
+                if line.startswith("DRACO "):
+                    p = line.split()
+                    done, tot = num(p[1]), num(p[2]) or num(p[3])
+                    if last_done and done < last_done * 0.5:   # next stream started
+                        base += last_total or last_done
+                    last_done, last_total = done, tot
+                    it["downloaded"] = int(base + done)
+                    it["size"] = int(base + tot) if tot else -1
+                    self.speed = it["speed"] = num(p[4])
+                    self.on_update(it)
+                elif line.startswith("DRACONAME "):
+                    self._name(line, ".mp3" if quality == "audio" else ".mp4")
+                elif line.startswith("DRACOFILE "):
+                    path = Path(line[10:])
+                    it["save_dir"], it["filename"] = str(path.parent), path.name
+                elif "ERROR" in line:
+                    last_err = line
+                if self.stop_event.is_set():
+                    break
+            self.proc.wait()
+            return self.proc.returncode, last_err
+        finally:
+            YTDLP_SLOTS.release()
 
     def _fetch_subs(self):
         """Run yt-dlp once more for subtitles only; returns the .srt files written (newest first)."""
