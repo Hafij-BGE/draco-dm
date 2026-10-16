@@ -41,7 +41,9 @@ class PrefsDialog(Adw.PreferencesDialog):
         from .. import native
         self._switch(g, "background_on_close", "Keep running in the background when the window is closed")
         self.rows["background_on_close"].set_subtitle(
-            "No taskbar entry; browser downloads are still caught. Quit with Tasks → Exit or Ctrl+Q")
+            "No taskbar entry; browser downloads are still caught. Quit from the top-bar icon or with Ctrl+Q")
+        self._switch(g, "tray_icon", "Show the Draco icon in the top bar")
+        self.rows["tray_icon"].set_subtitle("Click it to open Draco; its menu has Quit Draco")
         self.autostart = Adw.SwitchRow(title="Start Draco hidden at login",
                                        subtitle="Needed for snap/flatpak browsers and scheduled queues",
                                        active=native.autostart_enabled())
@@ -161,6 +163,7 @@ class PrefsDialog(Adw.PreferencesDialog):
         from ..__main__ import _launch_cmd
         if self.autostart.get_active() != native.autostart_enabled():
             native.set_autostart(self.autostart.get_active(), _launch_cmd())
+        self.app.update_tray()
         self.app.manager.global_limiter.set_rate(s["speed_limit_kbps"] * 1024)
         self.app.manager.pump_queues()
         if self.app.window:

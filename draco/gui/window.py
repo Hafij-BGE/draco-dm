@@ -784,7 +784,8 @@ class MainWindow(Adw.ApplicationWindow):
                 body = ("Downloads continue in the background." if self.manager.tasks else
                         "Draco keeps running to catch browser downloads.")
                 self.app.notify_text("Draco is running in the background",
-                                     body + " Open Draco from the app menu to show it again.",
+                                     body + (" Click the Draco icon in the top bar to show it again or quit."
+                                             if self.app.tray else " Open Draco from the app menu to show it again."),
                                      quit_button=True)
             return True
         # Nothing downloading: really exit (the app holds itself alive, so closing the window alone isn't enough).

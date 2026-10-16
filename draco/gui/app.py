@@ -67,6 +67,8 @@ class DracoApp(Adw.Application):
         self.set_accels_for_action("win.add-url", ["<Control>n"])
         self.set_accels_for_action("win.prefs", ["<Control>comma"])
         GLib.timeout_add_seconds(15, self._sched_tick)
+        self.tray = None
+        self.update_tray()
         self.hold()  # stay alive while the window is hidden
 
     def _ask_pair(self, origin):
@@ -141,7 +143,31 @@ class DracoApp(Adw.Application):
             self._dispatch_main(msg)
         self.initial = []
 
+    def update_tray(self):
+        """Show or hide the top-bar icon to match the setting (Linux; Windows has no tray yet)."""
+        want = self.settings.get("tray_icon", True) and not osdeps.IS_WIN
+        if want and not self.tray:
+            try:
+                from .tray import Tray
+                self.tray = Tray(self)
+                self.tray.start()
+            except Exception as e:  # noqa: BLE001 - no session bus: just no icon
+                print("tray icon unavailable:", e)
+                self.tray = None
+        elif not want and self.tray:
+            self.tray.stop()
+            self.tray = None
+        self._update_tray_tooltip()
+
+    def _update_tray_tooltip(self):
+        if not self.tray:
+            return
+        n = sum(1 for i in self.manager.items.values() if i["status"] in ("downloading", "connecting"))
+        self.tray.set_tooltip(f"{n} download{'s' if n != 1 else ''} running" if n else "No downloads running")
+
     def do_shutdown(self):
+        if getattr(self, "tray", None):
+            self.tray.stop()
         self.bridge.stop()
         self.manager.shutdown()
         self.ipc.stop()
@@ -392,6 +418,8 @@ class DracoApp(Adw.Application):
             GLib.idle_add(self._on_event_main, event, payload)
 
     def _on_event_main(self, event, payload):
+        if event in ("changed", "finished"):
+            self._update_tray_tooltip()
         if event == "finished" and payload["status"] == "complete":
             it = payload
             if self.settings["notify"]:
