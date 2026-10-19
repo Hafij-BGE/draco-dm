@@ -1,62 +1,156 @@
+<div align="center">
+
+<img src="data/icons/128.png" width="112" alt="Draco icon">
+
 # Draco Download Manager
 
-Created by **Md Hafijur Rahman**.
+**Fast, free download manager for Linux and Windows 11.**<br>
+Multi-connection downloads, browser capture, YouTube and streaming video. No accounts, no trials, no subscriptions.
 
-A free download manager for Linux, written from scratch. It speeds up downloads by using several connections per file, can resume broken downloads, catches downloads and videos from your browser, and runs queues on a schedule. There are no accounts, trials or subscriptions.
+[![Latest release](https://img.shields.io/github/v/release/Hafij-BGE/draco-dm?label=release&color=7c4dff)](https://github.com/Hafij-BGE/draco-dm/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/Hafij-BGE/draco-dm/total?color=2ea44f)](https://github.com/Hafij-BGE/draco-dm/releases)
+[![Build](https://img.shields.io/github/actions/workflow/status/Hafij-BGE/draco-dm/build.yml?label=build)](https://github.com/Hafij-BGE/draco-dm/actions/workflows/build.yml)
+[![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
+![Platforms](https://img.shields.io/badge/platforms-Linux%20%7C%20Windows%2011-555)
 
-Built with Python 3 and GTK4/libadwaita, using only the standard library. ffmpeg and yt-dlp are optional extras.
+[**Download**](https://github.com/Hafij-BGE/draco-dm/releases/latest) ·
+[Features](#features) ·
+[Browser extension](#browser-extension) ·
+[Video & YouTube](#video-youtube-and-subtitles) ·
+[Build from source](#build-from-source)
+
+<img src="docs/screenshots/main-classic.png" alt="Draco main window with downloads in progress" width="900">
+
+</div>
+
+## Highlights
+
+- ⚡ **Up to 32 connections per file** with dynamic segmentation: a connection that finishes early takes over half of the largest unfinished piece, so every connection stays busy until the end.
+- ⏯️ **Pause, resume and crash recovery.** Every connection's position is saved, so downloads continue exactly where they stopped, even after a reboot.
+- 🌐 **Browser capture** for Chrome, Edge, Brave, Opera, Vivaldi and Firefox, including snap and Flatpak browsers. Cookies and referrer are passed along, so logged-in downloads work.
+- 🎬 **Video downloads** from YouTube and 1000+ sites, plus HLS/DASH streams, with the size of every quality shown before you choose.
+- 🗂️ **Queues, scheduler, categories, speed limiter**, site grabber, batch downloads and a clipboard watcher.
+- 🎨 **14 themes** with matching icon styles, from a classic desktop look to *Galaxy* and *Midnight*.
+- 🪶 **Lightweight and private.** Python 3 + GTK 4/libadwaita, standard library only. No telemetry, no ads.
+
+## Install
+
+Get the file for your system from the [**latest release**](https://github.com/Hafij-BGE/draco-dm/releases/latest):
+
+| System | File | Install |
+|---|---|---|
+| **Windows 11** | `DracoSetup-<version>.exe` | Double-click it. SmartScreen may warn because the app isn't code-signed: **More info → Run anyway**. |
+| **Ubuntu, Debian, Mint, Pop!_OS** | `draco-dm_<version>_all.deb` | `sudo apt install ./draco-dm_*_all.deb` |
+| **Fedora** | `draco-dm-<version>-1.noarch.rpm` | `sudo dnf install ./draco-dm-*.noarch.rpm` |
+| **Arch, Manjaro, EndeavourOS** | `draco-dm-<version>-1-any.pkg.tar.zst` | `sudo pacman -U draco-dm-*-any.pkg.tar.zst` |
+| **Any Linux (sandboxed, self-contained)** | `Draco-<version>-x86_64.flatpak` | `flatpak install --user Draco-*-x86_64.flatpak` |
+| **Any Linux with GTK 4 (portable)** | `Draco-<version>-x86_64.AppImage` | `chmod +x Draco-*.AppImage`, then run it |
+| **Anything else** | `draco-dm-<version>-linux.tar.gz` | Unpack, then `./install.sh` (no root needed) |
+
+The Windows installer, AppImage and Flatpak include yt-dlp and ffmpeg. The `.deb` and `.rpm` install them from your distribution as recommended packages. On Arch, install them yourself: `sudo pacman -S yt-dlp ffmpeg`.
+
+> [!NOTE]
+> The Linux package is called `draco-dm` because Ubuntu already has an unrelated package named `draco`. The command is still `draco`.
 
 ## Features
 
-| Feature | How it works in Draco |
+### Downloading
+
+| | |
 |---|---|
-| Faster downloads | Up to 32 connections per file. When one connection finishes, it takes over half of the largest unfinished piece ("dynamic segmentation"), so every connection stays busy until the end. |
-| Pause / resume / crash recovery | Each connection's position is saved in the download list. Resuming continues from those positions, including after a crash or reboot. |
-| Browser integration | An extension for Chrome, Brave, Edge, Chromium, Vivaldi and Firefox sends downloads to Draco. It passes along cookies and the referrer, so logged-in downloads work. |
-| "Download this video" panel | The extension spots video and audio streams on a page and shows a button on the video player. |
-| HLS / DASH streams | `.m3u8` streams download in parallel and are joined into one MP4. Encrypted or live streams and `.mpd` go through ffmpeg. |
-| YouTube and similar sites | Uses yt-dlp, if installed: right-click the page and choose *Download video from this page*. |
-| Categories | Compressed, Documents, Music, Programs, Video and General. Each has its own folder and can be edited in Preferences. |
-| Queues and scheduler | Several queues, each with its own number of simultaneous downloads. Start/stop times, weekdays, run-once option, retry of failed files. After a queue finishes, Draco can exit, suspend, hibernate or shut down, with a 60-second cancel window. |
-| Speed limiter | A global limit in the status bar and a per-download limit in the progress window. |
-| Progress window | Size, speed, time left, resume support, a live map of the connections, and per-connection details. |
-| Refresh download address | Give an expired download a new link and keep the data already downloaded. You can paste the link, or click "Wait for browser" and click the link again in your browser. |
-| Site grabber | Crawls a site to a chosen depth and lists all files of the chosen types. Pick the ones you want and queue them. |
-| Batch download | `https://site/img[001-150].jpg`, `part[a-f].rar`, or `*` with a range. |
-| Download all links | From the browser's right-click menu, or by pasting or dropping several links. |
-| Clipboard watcher | Copying a link to a file type on the capture list offers to download it. |
-| Drag and drop / Ctrl+V | Drop or paste links onto the main window. |
-| Site logins | HTTP Basic login per site pattern. |
-| Virus scan after download | Runs any command you set, e.g. `clamscan --no-summary {file}`. |
-| Notifications and sound | A desktop notification and a sound when a download completes or fails. |
-| Import / export | Import links from a text file; export the list. |
-| Command line | `draco URL`, `draco --now URL`, `draco --status`. |
+| **Multi-connection engine** | Up to 32 connections per file with dynamic segmentation. Single-connection fallback for servers without range support. |
+| **Resume anything** | Resume after pause, crash or reboot. Expired link? **Refresh download address** gives it a new link and keeps the data already downloaded. You can paste the link, or click *Wait for browser* and click it again in your browser. |
+| **Progress window** | Size, speed, time left, resume support, a live map of the connections, per-connection details, its own speed limit and "on completion" actions. |
+| **Queues and scheduler** | Several queues, each with its own number of simultaneous downloads. Start and stop times, weekdays, run once, retry failed files. When a queue finishes, Draco can exit, suspend, hibernate or shut down, with a 60-second cancel window. |
+| **Speed limiter** | A global limit in the status bar, plus a per-download limit. |
+| **Categories** | Compressed, Documents, Music, Programs, Video and General, each with its own folder and file types (editable in Options). |
 
-## YouTube and quick capture
+### Capture and tools
 
-- **YouTube, Vimeo, TikTok, Facebook, Instagram, X, Reddit, Twitch, SoundCloud and more** are downloaded through yt-dlp, which the .deb pulls in.
-- **On the video player:** a **⬇ Download this video** button appears. Pick a quality and Draco shows a confirmation dialog with the title, length and estimated size of every quality. With **Quick capture** on, it starts straight away.
-- **Alt+Shift+D (quick capture):** downloads the current page's video at the best quality, with no dialog. On other sites it grabs the largest video the page has played.
-- **Quick capture switch** in the extension popup: every download the browser hands to Draco starts instantly, without the file-info dialog.
-- **Right-click a link → Quick download with Draco:** the same, for a single link.
+| | |
+|---|---|
+| **Browser integration** | The extension hands downloads to Draco. Draco checks each link first; links that only work inside the browser (such as Google Drive) stay with the browser. |
+| **Download all links** | From the browser's right-click menu, or by pasting or dropping several links onto Draco. |
+| **Site grabber** | Crawls a site to a chosen depth and lists every file of the chosen types to pick from. |
+| **Batch download** | Patterns like `https://site/img[001-150].jpg` or `part[a-f].rar`. |
+| **Clipboard watcher** | Copy a link to a file type on the capture list and Draco offers to download it. |
+| **Site logins** | HTTP Basic login per site pattern. |
+| **Virus scan hook** | Run any command after a download, e.g. `clamscan --no-summary {file}`. |
+| **Notifications** | One grouped desktop notification and an optional sound when downloads finish or fail. |
+| **Import / export** | Import links from a text file; export the download list. |
+
+### Runs quietly in the background
+
+Closing the window keeps Draco running, with no taskbar entry, so browser downloads are still caught instantly. On Linux, a **Draco icon in the top bar** opens the window, adds a URL or quits Draco, and its tooltip shows how many downloads are running.
+
+- Turn either behaviour off in **Options → General**.
+- Turn on **Start Draco hidden at login** to always have it ready. Scheduled queues and snap/Flatpak browsers need this.
+- On Ubuntu's GNOME the icon uses the built-in AppIndicator support. Other GNOME setups need the *AppIndicator and KStatusNotifierItem Support* extension. KDE, Cinnamon, XFCE and Budgie show it natively.
+
+## Video, YouTube and subtitles
+
+- **YouTube, Vimeo, TikTok, Facebook, Instagram, X, Reddit, Twitch, SoundCloud and 1000+ more** are downloaded through [yt-dlp](https://github.com/yt-dlp/yt-dlp).
+- **⬇ Download this video** appears on the video player. Pick a quality and Draco shows the title, length and estimated size of every quality before it starts.
+- **HLS (`.m3u8`)** streams download in parallel and are joined into one MP4, showing resolution, size and length. Encrypted or live streams and DASH (`.mpd`) go through ffmpeg.
+- **Quick capture** (`Alt+Shift+D`) downloads the current page's video at the best quality with no dialog. The **Quick capture** switch in the extension popup starts every captured download straight away.
+- **Subtitles:** tick **Include subtitles** and they are embedded in the video as a switchable track and also saved as `.srt`. **Subtitles only (.srt)** fetches just the text, in your browser's language with English as a fallback.
+
+Draco runs at most two YouTube downloads at once and retries automatically when YouTube is busy.
+
+## Browser extension
+
+The extension shows a toolbar popup with the connection status, a capture on/off switch, the file types to capture and the media found on the current page.
+
+**Chrome, Edge, Brave, Opera, Vivaldi:**
+
+1. Draco places the extension in `Documents/Draco Browser Extension` on first start. It is also in every release as `draco-extension-chromium-<version>.zip`.
+2. Open the browser's extensions page (`chrome://extensions`), turn on **Developer mode** and click **Load unpacked**.
+3. Choose the `chrome` folder.
+
+**Firefox:** use `draco-extension-firefox-<version>.zip`, or open `about:debugging#/runtime/this-firefox` and load `manifest.json` as a temporary add-on. Regular Firefox removes temporary add-ons on restart. To keep it, use Developer Edition or ESR with `xpinstall.signatures.required=false`.
+
+**Snap and Flatpak browsers** (Ubuntu's Brave, Opera, Chromium and Firefox) can't start programs through native messaging. Click **Connect to Draco** in the extension popup and press **Allow** in Draco. This pairs the browser with Draco over `127.0.0.1` using a secret token, and web pages can't use the connection. Keep **Start Draco hidden at login** on, because a sandboxed browser can't launch Draco itself.
+
+After an update, Draco refreshes its copy of the extension. Click **Reload** on the extension's card to pick it up.
 
 ## Themes
 
-**View → Theme** (or Preferences → General) switches instantly between: Follow desktop, Draco Classic, Retro Gray, Soft Light, Galaxy, Dark, Midnight Blue, Nightshade, Arctic Frost, Sand Light, Deep Teal, Forest, Sunset and High Contrast. Each theme brings matching icons (colourful, flat, monochrome or accent-coloured). You can override this under **View → Icon Style** or the palette button: *Match theme*, *Colourful*, *Flat*, *Monochrome*, *Accent colour*. To add your own theme, copy an entry in `draco/gui/style.py` (`THEMES`) and change its colours.
+Switch instantly under **View → Theme** or with the palette button in the toolbar. The themes are *Follow desktop*, *Draco Classic*, *Retro Gray*, *Soft Light*, *Galaxy*, *Dark*, *Midnight Blue*, *Nightshade*, *Arctic Frost*, *Sand Light*, *Deep Teal*, *Forest*, *Sunset* and *High Contrast*.
 
-## Subtitles
+Each theme brings matching icons. To override them, use **View → Icon Style**: *Colourful*, *Flat*, *Monochrome* or *Accent colour*.
 
-Tick **Include subtitles** in the video button's menu, in the extension popup, or in Draco's download dialog. The subtitles are added to the video as a track you can switch on and off, and also saved as a `.srt` next to it. **Subtitles only (.srt)** fetches just the text. Draco uses your browser's language, falling back to English.
+<div align="center">
+<img src="docs/screenshots/main-galaxy.png" alt="Draco with the Galaxy theme" width="760">
+</div>
 
-## Windows 11
+To add your own theme, copy an entry in `THEMES` in `draco/gui/style.py` and change its colours.
 
-The code runs on Windows 11 as well. To build `DracoSetup.exe` on a Windows PC, follow [packaging/windows/BUILD-WINDOWS.md](packaging/windows/BUILD-WINDOWS.md): two `winget` installs, then one build script.
+## Command line
 
-## Download
+```bash
+draco https://example.org/file.iso        # open the File Info dialog for a link
+draco --now https://example.org/file.iso  # start right away
+draco --background                        # start hidden (used for login autostart)
+draco --status                            # is Draco running?
+draco --selftest                          # check the installation
+draco --install-browser                   # (re)register the browser native-messaging host
+```
 
-Ready-made packages for every system are on the [Releases page](https://github.com/Hafij-BGE/draco-dm/releases/latest): Windows 11 installer, `.deb` (Ubuntu/Debian), `.rpm` (Fedora), Arch package, Flatpak, AppImage and a portable `.tar.gz`. The release notes say which file to pick.
+## Build from source
 
-### Building the packages yourself
+Run straight from a checkout:
+
+```bash
+sudo apt install python3-gi gir1.2-gtk-4.0 gir1.2-adw-1   # usually already present on GNOME
+bin/draco
+python3 -m unittest discover tests
+```
+
+Install for your user only (no root): run `./install.sh`. Add `--autostart` to start hidden at login, and run `./install.sh --uninstall` to remove it. Your settings (`~/.config/draco`) and download list (`~/.local/share/draco`) are kept.
+
+Optional extras: `sudo apt install ffmpeg` for encrypted/live HLS and DASH, and `pipx install yt-dlp` for video sites.
+
+Build the packages:
 
 ```bash
 sh packaging/linux/build-deb.sh        # dist/draco-dm_<version>_all.deb
@@ -66,81 +160,37 @@ sh packaging/linux/build-appimage.sh   # downloads appimagetool, yt-dlp, ffmpeg 
 sh packaging/linux/build-tarball.sh
 ```
 
-The Flatpak recipe is `packaging/flatpak/io.github.draco.DracoDM.yml`, and the Windows build is described in `packaging/windows/BUILD-WINDOWS.md`. GitHub Actions (`.github/workflows/build.yml`) builds and self-tests all of them, and pushing a `v*` tag publishes a release.
+- **Flatpak:** the recipe is `packaging/flatpak/io.github.draco.DracoDM.yml`.
+- **Windows:** see [packaging/windows/BUILD-WINDOWS.md](packaging/windows/BUILD-WINDOWS.md) for two `winget` installs and one build script.
+- **CI:** [GitHub Actions](.github/workflows/build.yml) builds and self-tests every format. Pushing a `v*` tag publishes a release with notes from `docs/release-notes/<tag>.md`.
 
-The Linux package is called `draco-dm` because Ubuntu already has an unrelated package named `draco`. The command is still `draco`.
-
-## Install for your user only (no root)
-
-```bash
-sudo apt install python3-gi gir1.2-gtk-4.0 gir1.2-adw-1   # usually already present on GNOME
-./install.sh               # installs to ~/.local, no root needed
-./install.sh --autostart   # optional: start hidden at login so scheduled queues run
-```
-
-Optional extras:
-
-```bash
-sudo apt install ffmpeg    # encrypted/live HLS, DASH, MP4 remux of HLS
-pipx install yt-dlp        # YouTube and 1000+ video sites
-```
-
-Remove with `./install.sh --uninstall`. Your settings (`~/.config/draco`) and download list (`~/.local/share/draco`) are kept.
-
-### Snap / Flatpak browsers (Ubuntu's Brave, Opera, Chromium, Firefox snaps)
-
-Sandboxed browsers can't start Draco through native messaging, and their file picker can't see hidden folders. Draco handles both:
-
-1. Draco copies the extension to `~/Documents/Draco Browser Extension/` (a visible folder). Load the `chrome` folder from there.
-2. Click the Draco button in the browser toolbar, then **Connect to Draco**, and press **Allow** in Draco. This pairs the browser over `127.0.0.1` with a secret token. Web pages can't use this connection: Draco only accepts requests from its own extension.
-3. Leave **Start Draco automatically at login** ticked. A snap browser can't launch Draco by itself, so Draco must already be running.
-
-### Browser extension (one time)
-
-`install.sh` registers the native-messaging host and unpacks the extension to `~/.local/share/draco/extension/`.
-
-- **Chrome / Brave / Edge / Chromium / Vivaldi:** open `chrome://extensions`, turn on *Developer mode*, click *Load unpacked*, and choose `~/.local/share/draco/extension/chrome`.
-- **Firefox:** open `about:debugging#/runtime/this-firefox`, click *Load Temporary Add-on*, and choose `~/.local/share/draco/extension/firefox/manifest.json`. Regular Firefox removes temporary add-ons on restart. To keep it permanently, use Firefox Developer Edition or ESR with `xpinstall.signatures.required=false`, or sign it for free on addons.mozilla.org.
-
-The toolbar popup shows whether Draco is connected. It also has the capture on/off switch, the list of file types to capture, and the media found on the current page. If Draco isn't running, the browser starts it in the background.
-
-## Changing the icons
-
-- **App icon:** replace `data/draco-source.png` with any square-ish picture on a white background, then run `python3 tools/make_icons.py`. It removes the outer white background and writes every size: the desktop icon, the browser extension icons and the in-app icon.
-- **Toolbar and category icons:** these are SVG files in `draco/icons/` (for example `draco-add-url.svg` or `draco-cat-video.svg`). Replace any file with your own artwork under the same name.
-
-Run `./install.sh` again after changing either.
-
-## Run from the source folder
-
-```bash
-bin/draco
-python3 -m unittest tests.test_engine     # engine tests
-```
-
-## Layout
+### Project layout
 
 ```
-draco/engine.py     multi-connection HTTP/FTP engine, dynamic segmentation, rate limiter
-draco/media.py      HLS downloader, ffmpeg and yt-dlp bridges
-draco/manager.py    download list, queues, scheduler, persistence
-draco/grabber.py    site crawler
-draco/batch.py      batch pattern expansion
-draco/ipc.py        per-user Unix socket (single instance, CLI, browser host)
-draco/native.py     native-messaging host registration
-draco/gui/          GTK4/libadwaita windows and dialogs
-native_host/         the stdio host started by the browser
-extension/chrome/    the browser extension (the Firefox variant is generated at install)
+draco/engine.py      multi-connection HTTP/FTP engine, dynamic segmentation, rate limiter
+draco/media.py       HLS downloader, ffmpeg and yt-dlp bridges
+draco/manager.py     download list, queues, scheduler, persistence
+draco/grabber.py     site crawler            draco/batch.py    batch pattern expansion
+draco/ipc.py         single instance + CLI (Unix socket, or TCP with a token on Windows)
+draco/bridge.py      loopback HTTP bridge for snap/Flatpak browsers (paired with a token)
+draco/native.py      native-messaging host registration (Linux and Windows)
+draco/osdeps.py      platform helpers: folders, autostart, opening files
+draco/gui/           GTK 4 / libadwaita windows, dialogs, themes and the top-bar icon
+native_host/         the stdio host the browser starts
+extension/chrome/    browser extension (the Firefox variant is generated from it)
+packaging/           .deb, .rpm, Arch, AppImage, Flatpak, tarball and Windows installer
 ```
 
-## Notes and limits
+To change the app icon, replace `data/draco-source.png` and run `python3 tools/make_icons.py`. The toolbar and category icons are SVG files in `draco/icons/`.
 
-- GTK4 has no tray icon. While downloads are running, closing the window hides it instead. Run `draco` again, or click *Open Draco* in the extension popup, to bring it back.
-- On Wayland, the clipboard watcher only sees new links while Draco's window has focus. This is a security rule of the desktop, not a bug.
+## Privacy and limits
+
+- Draco makes no network requests of its own: no telemetry, no update checks, no ads.
+- The download list can hold cookies, so it is stored with file mode `600`. Site logins in `settings.json` are also mode `600`, but not encrypted.
+- On Wayland, the clipboard watcher only sees new links while Draco's window has focus. This is a desktop security rule, not a bug.
 - FTP downloads use a single connection.
-- Downloads that need DRM (Netflix and similar) are not supported.
-- The download list holds cookies and is stored with mode 600. Site logins in `settings.json` are not encrypted (also mode 600).
+- DRM-protected streams (Netflix and similar) are not supported.
 
-## Credits
+## License
 
-Draco Download Manager © 2026 Md Hafijur Rahman. Licensed under the GPL-3.0.
+Draco Download Manager © 2026 **Md Hafijur Rahman**, licensed under the [GPL-3.0](LICENSE).
