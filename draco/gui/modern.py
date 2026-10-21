@@ -39,12 +39,52 @@ class ModernLayout:
         body.append(self.side_pane)
         self.details_paned = Gtk.Paned(orientation=Gtk.Orientation.HORIZONTAL, hexpand=True,
                                        shrink_end_child=False, resize_end_child=False)
-        self.details_paned.set_start_child(self._modern_list())
+        main = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12, hexpand=True)
+        self.wide_stats = self._modern_wide_stats()
+        main.append(self.wide_stats)
+        main.append(self._modern_list())
+        self.details_paned.set_start_child(main)
         self.details_paned.set_end_child(self._modern_details())
         body.append(self.details_paned)
         root.append(body)
         root.append(self._modern_statusbar())
+        self._pane_mode(self.app.settings.get("details_pane", True))
         return root
+
+    def _modern_wide_stats(self):
+        """The stats row above the list, used while the details pane is closed."""
+        row = Gtk.Box(spacing=12)
+        speed = Gtk.Box(spacing=16, hexpand=True)
+        speed.add_css_class("dm-card")
+        col = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, valign=Gtk.Align.CENTER, margin_start=18)
+        col.append(util.label("Total Download Speed", css=["dm-stat-title"], ellipsize=False))
+        self.wide_speed_value = util.label("0 B/s", css=["dm-stat-value", "dm-stat-big"], ellipsize=False)
+        col.append(self.wide_speed_value)
+        speed.append(col)
+        self.wide_graph = Sparkline(height=74)
+        self.wide_graph.set_margin_top(8)
+        self.wide_graph.set_margin_bottom(8)
+        self.wide_graph.set_margin_end(14)
+        speed.append(self.wide_graph)
+        row.append(speed)
+        self.wide_rings = {}
+        for key, title in (("active", "Active"), ("done", "Completed"), ("queue", "Queued")):
+            card = Gtk.Box(spacing=12, width_request=180)
+            card.add_css_class("dm-card")
+            ring = Ring(key, size=58)
+            ring.set_margin_start(14)
+            ring.set_margin_top(10)
+            ring.set_margin_bottom(10)
+            self.wide_rings[key] = ring
+            card.append(ring)
+            card.append(util.label(title, css=["dm-stat-title"], ellipsize=False))
+            row.append(card)
+        return row
+
+    def _pane_mode(self, pane_open):
+        """Pane open: compact stats in the header. Pane closed: the wide stats row above the list."""
+        self.header_stats.set_visible(pane_open)
+        self.wide_stats.set_visible(not pane_open)
 
     def _modern_header(self):
         handle = Gtk.WindowHandle()
@@ -101,6 +141,7 @@ class ModernLayout:
         right.append(top)
 
         stats = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        self.header_stats = stats
         stats.add_css_class("dm-card")
         stats.set_margin_top(2)
         inner = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4, margin_start=14, margin_end=14,
@@ -368,6 +409,7 @@ class ModernLayout:
     # ------------------------------------------------------------- details pane
     def _show_details(self, on):
         self.details_revealer.set_reveal_child(on)
+        self._pane_mode(on)
         self.app.settings["details_pane"] = on
         self.app.settings.save()
 
@@ -455,9 +497,12 @@ class ModernLayout:
         total = max(1, len(items))
         self.speed_value.set_text(fmt_speed(speed) or "0 B/s")
         self.speed_graph.push(speed)
-        self.rings["active"].set_value(len(active), len(active) / total)
-        self.rings["done"].set_value(len(done), len(done) / total)
-        self.rings["queue"].set_value(len(queued), len(queued) / total)
+        self.wide_graph.push(speed)
+        self.wide_speed_value.set_text(fmt_speed(speed) or "0 B/s")
+        for rings in (self.rings, self.wide_rings):
+            rings["active"].set_value(len(active), len(active) / total)
+            rings["done"].set_value(len(done), len(done) / total)
+            rings["queue"].set_value(len(queued), len(queued) / total)
         self.st_active.set_text(f"{len(active)} active")
         self.st_done.set_text(f"{len(done)} completed")
         self.st_total.set_text(f"{len(items)} total")

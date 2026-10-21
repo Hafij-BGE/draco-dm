@@ -410,7 +410,7 @@ button.dm-tile {{
   background: {tile}; border: 1px solid {tile_border}; box-shadow: 0 2px 8px rgba(0,0,0,0.25);
 }}
 button.dm-tile:hover {{ background: {tile_hover}; box-shadow: 0 0 14px {glow}; }}
-button.dm-tile:disabled {{ opacity: 0.45; }}
+button.dm-tile:disabled > box {{ opacity: 0.4; }}
 button.dm-tile label {{ font-size: 9.5pt; }}
 button.dm-tile.primary {{
   background: linear-gradient(135deg, {a1}, {a2}); color: #ffffff; border-color: transparent;
@@ -427,6 +427,7 @@ button.dm-icon-btn:hover {{ background: {tile_hover}; }}
 .dm-stat-title {{ color: {dim}; font-size: 9.5pt; }}
 .dm-stat-value {{ font-size: 18pt; font-weight: 800; color: {fg}; }}
 .dm-ring-label {{ font-size: 9pt; color: {dim}; }}
+.dm-stat-big {{ font-size: 24pt; }}
 .dm-ring-num {{ font-size: 13pt; font-weight: 800; color: {fg}; }}
 
 .dm-side {{ padding: 8px; }}
