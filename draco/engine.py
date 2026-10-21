@@ -72,6 +72,20 @@ class RateLimiter:
 # Request helpers
 # ---------------------------------------------------------------------------
 
+LOGIN_ERROR = ("The site asks to sign in again (the browser's login has been renewed). "
+               "Open the site in your browser and Draco continues by itself, or click Resume.")
+
+
+def is_login_page(resp, url):
+    """A range request answered with a web page, or sent off to a sign-in page, instead of the file."""
+    ctype = (resp.headers.get("Content-Type") or "").lower()
+    final = urllib.parse.urlsplit(resp.geturl() or url)
+    asked = urllib.parse.urlsplit(url)
+    moved = final.hostname != asked.hostname
+    signin = any(w in (final.hostname or "") + final.path.lower() for w in ("accounts.", "login", "signin", "sign-in", "auth"))
+    return ctype.startswith("text/html") and (moved or signin)
+
+
 def build_headers(item, settings):
     headers = {
         "User-Agent": item.get("user_agent") or settings["user_agent"],
@@ -293,6 +307,11 @@ class HttpTask:
             self._set(status="connecting", error="", last_try=time.time())
             if it.get("size", -1) in (-1, None) or not it.get("probed"):
                 info = probe(it, self.settings)
+                has_data = any(sg.get("p", 0) > sg.get("s", 0) for sg in it.get("segments") or [])
+                if has_data and (info["content_type"] or "").startswith("text/html"):
+                    # Never replace downloaded data with a sign-in or error page.
+                    it["needs_login"] = True
+                    raise DownloadError(LOGIN_ERROR)
                 it.update(size=info["size"], resumable=info["resumable"], probed=True,
                           final_url=info["final_url"], content_type=info["content_type"])
                 if not it.get("filename"):
@@ -435,10 +454,17 @@ class HttpTask:
                 with open_url(opener, url, headers, self.settings["timeout"], rng) as resp:
                     status = getattr(resp, "status", None) or resp.getcode()
                     if rng and status != 206:
+                        if is_login_page(resp, url):
+                            # The browser's login cookies Draco got have been replaced by newer ones
+                            # (Google rotates them every few minutes). Keep retrying: the extension
+                            # sends fresh cookies as soon as the browser has them.
+                            it["needs_login"] = True
+                            raise DownloadError(LOGIN_ERROR)
                         if start == 0 and len(it["segments"]) == 1:
                             pass  # server ignored Range but we want the whole thing anyway
                         else:
                             raise DownloadError("Server stopped honouring byte ranges")
+                    it.pop("needs_login", None)
                     if not it.get("resumable") and start:
                         # Not resumable: restart this stream from scratch.
                         with self.lock:

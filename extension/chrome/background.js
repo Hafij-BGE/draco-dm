@@ -205,6 +205,30 @@ async function dropBrowserDownload(id) {
   try { await chrome.downloads.erase({ id }); } catch (e) { /* ignore */ }
 }
 
+// ---------------------------------------------------------------- fresh cookies for Draco
+// Sites such as Google Drive renew their login cookies every few minutes. Draco only has the
+// cookies from when it took the download, so a long download could suddenly get a sign-in page.
+// Draco lists the links it is still downloading; the browser sends its current cookies for them,
+// every minute and soon after the browser renews cookies.
+async function sendFreshCookies() {
+  const reply = await native({ cmd: "wanted_cookies" });
+  if (!reply.ok || !Array.isArray(reply.urls)) return;
+  for (const url of reply.urls.slice(0, 50)) {
+    const cookies = await cookiesFor(url);
+    if (cookies) await native({ cmd: "cookies", url, cookies });
+  }
+}
+
+chrome.alarms.create("draco-cookies", { periodInMinutes: 1 });
+chrome.alarms.onAlarm.addListener((a) => { if (a.name === "draco-cookies") sendFreshCookies(); });
+
+let cookieTimer = null;
+chrome.cookies.onChanged.addListener(({ removed }) => {
+  if (removed) return;                     // a renewal also fires "removed" for the old value
+  clearTimeout(cookieTimer);
+  cookieTimer = setTimeout(sendFreshCookies, 5000);   // cookies change in bursts: ask once
+});
+
 chrome.downloads.onCreated.addListener(async (item) => {
   if (!(await isNewDownload(item)) || !shouldCapture(item)) return;
   const url = item.finalUrl || item.url;

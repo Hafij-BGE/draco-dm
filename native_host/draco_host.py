@@ -13,7 +13,7 @@ import subprocess
 import sys
 import time
 
-ALLOWED = {"ping", "add", "links", "show", "grab"}
+ALLOWED = {"ping", "add", "links", "show", "grab", "cookies", "wanted_cookies"}
 FIELDS = {"cmd", "url", "urls", "referer", "cookies", "filename", "size", "user_agent", "kind",
           "content_type", "title", "description", "headers", "silent", "quality", "subs", "sub_lang", "verify"}
 LAUNCH = os.environ.get("DRACO_LAUNCH") or "@LAUNCH@"   # JSON list (or a plain path) filled in at install

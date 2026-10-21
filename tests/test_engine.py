@@ -20,12 +20,27 @@ PAYLOAD = os.urandom(5 * 1024 * 1024 + 123)
 class RangeHandler(http.server.BaseHTTPRequestHandler):
     support_range = True
     throttle = 0
+    valid_cookie = "s=v1"   # /login-file: other cookies are sent to a sign-in page
 
     def log_message(self, *a):
         pass
 
     def do_GET(self):
         data = PAYLOAD
+        if self.path.startswith("/accounts/signin"):
+            page = b"<!doctype html><html><body>Sign in</body></html>"
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Content-Length", str(len(page)))
+            self.end_headers()
+            self.wfile.write(page)
+            return
+        if self.path.startswith("/login-file") and self.headers.get("Cookie") != RangeHandler.valid_cookie:
+            self.send_response(302)
+            self.send_header("Location", "/accounts/signin?continue=/login-file")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
         if self.path.startswith("/norange"):
             self.send_response(200)
             self.send_header("Content-Length", str(len(data)))
@@ -116,6 +131,48 @@ class EngineTest(unittest.TestCase):
         self.assertEqual(it["status"], "complete", it.get("error"))
         self.assertGreater(len(it["segments"]), 1)
         self.assertEqual(self.sha(Path(self.tmp.name) / it["filename"]), hashlib.sha256(PAYLOAD).hexdigest())
+
+    def test_renewed_login_cookies_continue_the_download(self):
+        """The site renews its login mid-download (new requests get a sign-in page); once the
+        browser's new cookies arrive, the download carries on and the file is intact."""
+        RangeHandler.throttle, RangeHandler.valid_cookie = 0.03, "s=v1"
+        self.settings["retries"] = 8
+        it = self.item("/login-file", cookies="s=v1")
+
+        def renew():
+            time.sleep(0.4)
+            RangeHandler.valid_cookie = "s=v2"   # old cookies stop working for new requests
+            time.sleep(1.5)
+            it["cookies"] = "s=v2"               # what the extension sends to Draco
+
+        threading.Thread(target=renew, daemon=True).start()
+        self.run_task(it)
+        RangeHandler.throttle, RangeHandler.valid_cookie = 0, "s=v1"
+        self.assertEqual(it["status"], "complete", it.get("error"))
+        self.assertNotIn("needs_login", it)
+        self.assertEqual(self.sha(Path(self.tmp.name) / it["filename"]), hashlib.sha256(PAYLOAD).hexdigest())
+
+    def test_sign_in_page_never_replaces_downloaded_data(self):
+        RangeHandler.valid_cookie = "s=v2"
+        it = self.item("/login-file", cookies="s=old", size=len(PAYLOAD), resumable=True, filename="y.bin",
+                       segments=[{"s": 0, "p": 1000, "e": len(PAYLOAD)}])   # not probed yet
+        self.run_task(it)
+        RangeHandler.valid_cookie = "s=v1"
+        self.assertEqual(it["status"], "error")
+        self.assertTrue(it.get("needs_login"))
+        self.assertFalse(Path(self.tmp.name, "y.bin").exists())
+
+    def test_sign_in_page_is_reported_clearly(self):
+        RangeHandler.valid_cookie = "s=v2"
+        self.settings["retries"] = 0
+        it = self.item("/login-file", cookies="s=old", size=len(PAYLOAD), resumable=True, filename="x.bin",
+                       segments=[{"s": 0, "p": 1000, "e": len(PAYLOAD)}], probed=True)
+        Path(self.tmp.name, "x.bin" + self.settings["temp_suffix"]).write_bytes(PAYLOAD[:1000])
+        self.run_task(it)
+        RangeHandler.valid_cookie = "s=v1"
+        self.assertEqual(it["status"], "error")
+        self.assertIn("sign in again", it["error"])
+        self.assertTrue(it.get("needs_login"))
 
     def test_pause_resume(self):
         RangeHandler.throttle = 0.05

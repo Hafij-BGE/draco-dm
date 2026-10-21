@@ -196,6 +196,12 @@ class DracoApp(Adw.Application):
             return {"ok": True, "version": __version__}
         if cmd == "status":
             return {"ok": True, "items": len(self.manager.items), "active": len(self.manager.tasks)}
+        if cmd == "wanted_cookies":
+            return {"ok": True, "urls": self._cookie_urls()}
+        if cmd == "cookies":
+            # The browser renewed its cookies for a site Draco is downloading from.
+            GLib.idle_add(self._update_cookies, (msg.get("url") or "").strip(), msg.get("cookies") or "")
+            return {"ok": True}
         if cmd == "add" and msg.get("verify"):
             # A capture from the browser: check now (on this IPC thread) that Draco can really fetch
             # the link. If the server refuses a second request (POST forms, one-time links such as
@@ -205,6 +211,32 @@ class DracoApp(Adw.Application):
                 return verdict
         GLib.idle_add(self._dispatch_main, msg)
         return {"ok": True}
+
+    def _cookie_urls(self):
+        """Links of unfinished browser downloads that use cookies (the browser sends fresh ones)."""
+        urls = []
+        for it in list(self.manager.items.values()):
+            if it["status"] != "complete" and it.get("cookies") and it.get("kind", "http") == "http":
+                urls.append(it["url"])
+        return urls[:50]
+
+    def _update_cookies(self, url, cookies):
+        """Give unfinished downloads of this link the browser's current cookies; a download that
+        stopped because the site wanted a new login continues right away."""
+        if not url or not cookies:
+            return False
+        for it in list(self.manager.items.values()):
+            if it["status"] == "complete" or url not in (it["url"], it.get("final_url")):
+                continue
+            if it.get("cookies") == cookies:
+                continue
+            it["cookies"] = cookies
+            stalled = it.get("needs_login") or "honouring byte ranges" in (it.get("error") or "")
+            if it["status"] == "error" and stalled:
+                it["error"] = ""
+                self.manager.start(it["id"])
+        self.manager.save()
+        return False
 
     def _verify_capture(self, msg):
         url = (msg.get("url") or "").strip()

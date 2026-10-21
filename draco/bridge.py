@@ -16,7 +16,7 @@ import secrets
 import threading
 
 PORTS = range(47823, 47828)
-ALLOWED = {"ping", "add", "links", "show", "grab"}
+ALLOWED = {"ping", "add", "links", "show", "grab", "cookies", "wanted_cookies"}
 FIELDS = {"cmd", "url", "urls", "referer", "cookies", "filename", "size", "user_agent", "kind",
           "content_type", "title", "description", "headers", "silent", "quality", "subs", "sub_lang", "verify"}
 MAX_BODY = 8 * 1024 * 1024
