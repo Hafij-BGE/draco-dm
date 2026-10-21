@@ -64,7 +64,6 @@ BRIGHT = {
     "aurora-light": _light("#6b5cff", "#3c8bff", "#ebe8ff", "#d2ccff", "#eceeff", "hd-aurora-light.jpg",
                            name="Aurora Light"),
     "aurora-glow": _dark("#a855f7", "#c084fc", "#0b0c22", "hd-aurora-glow.jpg", name="Aurora Glow (Dark)"),
-    "galaxy-dark": _dark("#6366f1", "#818cf8", "#090b20", "hd-galaxy-dark.jpg", name="Galaxy Explorer (Dark)"),
     "forest-night": _dark("#10b981", "#34d399", "#07150f", "hd-forest-night.jpg", hi=("#2dd4bf", "#99f6e4"),
                           name="Forest Night (Dark)"),
     "midnight-ocean": _dark("#3b82f6", "#60a5fa", "#06101f", "hd-midnight-ocean.jpg", name="Midnight Ocean (Dark)"),
@@ -150,7 +149,8 @@ TEMPLATE = """
 
 window.bw-window {{
   background-color: {base}; background-image: url("{bg_url}");
-  background-size: cover; background-position: center top; color: {fg};
+  background-size: auto 270px; background-position: right top; background-repeat: no-repeat;
+  color: {fg};
 }}
 .bw-root {{ padding: 0 14px 12px 14px; }}
 .bw-brand-title {{ font-size: 21pt; font-weight: 800; color: {fg}; text-shadow: {glow3}; }}
@@ -174,7 +174,8 @@ button.bw-tile {{
 }}
 button.bw-tile label {{ font-size: 9pt; font-weight: 600; }}
 button.bw-tile:hover {{ background: {surface}; box-shadow: 0 3px 12px {shadow}; }}
-button.bw-tile:disabled > box {{ opacity: 0.45; }}
+button.bw-tile:disabled {{ opacity: 1; background: {tile_bg}; }}
+button.bw-tile:disabled > box {{ opacity: 0.4; }}
 button.bw-tile.primary {{
   min-width: 82px; background: linear-gradient(160deg, {a2}, {a1}); color: #ffffff; border-color: transparent;
   box-shadow: 0 4px 14px alpha({a1}, 0.35);
@@ -303,5 +304,5 @@ window.pk-{key} .pk-log label {{ font-family: monospace; font-size: 9pt; }}
 def css_for(key):
     vals = dict(BRIGHT[key])
     vals["bg_url"] = _url(vals["bg"])
-    vals["kind_css"] = "".join(KIND_TEMPLATE.format(key=k, bg_url=_url(f"pw2-bg-{k}.jpg"), **v) for k, v in KINDS.items())
+    vals["kind_css"] = "".join(KIND_TEMPLATE.format(key=k, bg_url=_url(f"pw2-bg-{k}.png"), **v) for k, v in KINDS.items())
     return TEMPLATE.format(**vals)

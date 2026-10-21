@@ -32,9 +32,10 @@ class PrefsDialog(Adw.PreferencesDialog):
         self._switch(g, "start_immediately", "Start downloads without showing the file info dialog")
         self._entry(g, "capture_exts", "File types caught from the clipboard (browser: set in the extension)")
         from . import style
-        self.theme_keys = [k for k, _ in style.theme_names()]
-        self.theme_row = Adw.ComboRow(title="Theme", subtitle="Also under View → Theme",
-                                      model=Gtk.StringList.new([n for _, n in style.theme_names()]))
+        groups = [(title, k, n) for title, items in style.theme_groups() for k, n in items]
+        self.theme_keys = [k for _, k, _ in groups]
+        self.theme_row = Adw.ComboRow(title="Theme", subtitle="Light, Dark and Classic themes · also under View → Theme",
+                                      model=Gtk.StringList.new([f"{t} · {n}" for t, _, n in groups]))
         cur = s.get("theme") or "classic"
         self.theme_row.set_selected(self.theme_keys.index(cur) if cur in self.theme_keys else 0)
         self.theme_row.connect("notify::selected",

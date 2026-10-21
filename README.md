@@ -30,7 +30,7 @@ Multi-connection downloads, browser capture, YouTube and streaming video. No acc
 - 🌐 **Browser capture** for Chrome, Edge, Brave, Opera, Vivaldi and Firefox, including snap and Flatpak browsers. Cookies and referrer are passed along, so logged-in downloads work.
 - 🎬 **Video downloads** from YouTube and 1000+ sites, plus HLS/DASH streams, with the size of every quality shown before you choose.
 - 🗂️ **Queues, scheduler, categories, speed limiter**, site grabber, batch downloads and a clipboard watcher.
-- 🎨 **32 themes**: 18 picture themes (11 light, 7 dark) with an illustrated header and a progress window coloured by file type, plus 14 classic themes.
+- 🎨 **31 themes**: 17 picture themes (11 light, 6 dark) with an illustrated header and a progress window coloured by file type, plus 14 classic themes.
 - 🪶 **Lightweight and private.** Python 3 + GTK 4/libadwaita, standard library only. No telemetry, no ads.
 
 ## Install
@@ -120,7 +120,7 @@ Switch instantly under **View → Theme** or with the palette button.
 
 **Picture themes:**
 - **Light:** Cosmic Sky, Starlight Forest, Aurora, Sunrise, Ocean, Minimal, Lavender, Sandstone, Monochrome, Sunset Nebula and Aurora Light.
-- **Dark:** Galaxy Explorer, Aurora Glow, Galaxy Explorer (Dark), Forest Night, Midnight Ocean, Royal Purple and Solar Eclipse.
+- **Dark:** Galaxy Explorer, Aurora Glow, Forest Night, Midnight Ocean, Royal Purple and Solar Eclipse.
 
 Each one has an illustrated header that fades into the window, white or dark tool tiles, a coloured sidebar, a download list with a details pane (progress ring, speed graph) and a status bar with the speed limiter and drive space.
 

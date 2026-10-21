@@ -352,8 +352,10 @@ class BrightLayout:
         for text, icon, action, primary in (
                 ("Add URL", "list-add-symbolic", "win.add-url", True), ("Resume", "draco-m-resume", "win.resume", False),
                 ("Stop", "draco-m-stop", "win.pause", False), ("Stop All", "draco-m-stop-all", "win.stop-all", False),
-                ("Delete", "draco-m-delete", "win.delete", False), ("Options", "draco-m-scheduler", "win.prefs", False),
-                ("Scheduler", "draco-m-options", "win.scheduler", False), ("Grabber", "draco-m-grabber", "win.grabber", False),
+                ("Delete", "draco-m-delete", "win.delete", False),
+                ("Delete Completed", "draco-m-delete-completed", "win.delete-completed", False),
+                ("Options", "draco-m-options", "win.prefs", False),
+                ("Scheduler", "draco-m-scheduler", "win.scheduler", False), ("Grabber", "draco-m-grabber", "win.grabber", False),
                 ("Batch", "draco-m-batch", "win.batch", False)):
             box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4)
             box.append(Gtk.Image(icon_name=icon, pixel_size=26 if primary else 24))

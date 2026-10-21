@@ -267,7 +267,8 @@ THEME_ICONS.update({k: "modern" for k in BRIGHT})
 def current_theme(key):
     """A saved theme name, or Draco Classic if it no longer exists (themes were renamed in 1.4.4)."""
     key = {"sky-light": "cosmic-sky", "rose-sunset": "sunset-nebula", "green-meadow": "starlight-forest",
-           "cosmic-minimal": "galaxy-explorer", "nebula-glow": "galaxy-explorer"}.get(key, key)
+           "cosmic-minimal": "galaxy-explorer", "nebula-glow": "galaxy-explorer",
+           "galaxy-dark": "galaxy-explorer"}.get(key, key)
     return key if key in THEMES or key in MODERN or key in BRIGHT else "classic"
 # Line icons for the monochrome/accent styles (GTK recolours them to match the theme).
 SYMBOLIC = {
@@ -681,6 +682,28 @@ _current = "classic"
 def current_palette():
     """Colours of the active dashboard theme (None for the classic themes)."""
     return MODERN.get(_current) or BRIGHT.get(_current)
+
+
+def theme_groups():
+    """Themes by category: [(title, [(key, name), …]), …] for the theme menus and Options."""
+    def clean(name):
+        return name.replace(" (Light)", "").replace(" (Dark)", "") if name.count("Galaxy Explorer") == 0 else name
+    light = [(k, clean(t["name"])) for k, t in BRIGHT.items() if not t.get("dark")]
+    dark = [(k, clean(t["name"])) for k, t in BRIGHT.items() if t.get("dark")]
+    classic = [(k, t["name"]) for k, t in THEMES.items()] + [(k, t["name"]) for k, t in MODERN.items()]
+    return [("Light", light), ("Dark", dark), ("Classic", classic)]
+
+
+def theme_menu():
+    """Gio.Menu with one submenu per theme category."""
+    from gi.repository import Gio
+    menu = Gio.Menu()
+    for title, items in theme_groups():
+        sub = Gio.Menu()
+        for key, name in items:
+            sub.append(name, f"win.theme::{key}")
+        menu.append_submenu(f"{title} themes", sub)
+    return menu
 
 
 def theme_names():

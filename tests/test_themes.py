@@ -31,6 +31,20 @@ class ThemeTest(unittest.TestCase):
             self.assertIsNone(style.progress_style(key, "Video"))
 
 
+class ThemeGroupTest(unittest.TestCase):
+    def test_every_theme_is_in_exactly_one_category(self):
+        groups = style.theme_groups()
+        self.assertEqual([t for t, _ in groups], ["Light", "Dark", "Classic"])
+        keys = [k for _, items in groups for k, _ in items]
+        self.assertEqual(sorted(keys), sorted(k for k, _ in style.theme_names()))
+        self.assertEqual(len(keys), len(set(keys)))
+        names = [n for _, items in groups for _, n in items]
+        self.assertEqual(len(names), len(set(names)), "two themes would look the same in a menu")
+        for title, items in groups[:2]:
+            for k, _ in items:
+                self.assertEqual(style.BRIGHT[k].get("dark", False), title == "Dark", k)
+
+
 class BrightThemeTest(unittest.TestCase):
     def test_light_picture_themes_build_and_have_art(self):
         from draco.gui import bright_style

@@ -633,12 +633,7 @@ class ModernLayout:
 
     # ------------------------------------------------------------- menus
     def _theme_menu(self):
-        palette = Gio.Menu()
-        themes = Gio.Menu()
-        for key, name in style.theme_names():
-            themes.append(name, f"win.theme::{key}")
-        palette.append_section("Theme", themes)
-        return palette
+        return style.theme_menu()
 
     def _menu_model(self):
         """The classic menu bar, as one menu."""

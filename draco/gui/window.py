@@ -130,10 +130,7 @@ class MainWindow(BrightLayout, ModernLayout, Adw.ApplicationWindow):
         view = Adw.ToolbarView(top_bar_style=Adw.ToolbarStyle.FLAT)
         header = Adw.HeaderBar(title_widget=Adw.WindowTitle(title=APP_NAME))
         palette = Gio.Menu()
-        themes = Gio.Menu()
-        for key, name in style.theme_names():
-            themes.append(name, f"win.theme::{key}")
-        palette.append_section("Theme", themes)
+        palette.append_submenu("Theme", style.theme_menu())
         icon_styles = Gio.Menu()
         for key, name in style.ICON_STYLES:
             icon_styles.append(name, f"win.icon-style::{key}")
@@ -187,9 +184,7 @@ class MainWindow(BrightLayout, ModernLayout, Adw.ApplicationWindow):
             [("Speed Limiter", "win.speed-limiter")],
             [("Scheduler…", "win.scheduler"), ("Start Queue", "win.start-queue"), ("Stop Queue", "win.stop-queue")],
             [("Options…", "win.prefs")])
-        themes = Gio.Menu()
-        for key, name in style.theme_names():
-            themes.append(name, f"win.theme::{key}")
+        themes = style.theme_menu()
         view = Gio.Menu()
         s1 = Gio.Menu()
         s1.append("Categories", "win.show-categories")
