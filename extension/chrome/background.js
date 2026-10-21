@@ -161,7 +161,7 @@ function shouldCapture(item) {
     !/^(application\/(json|xml|javascript)|text\/)/i.test(item.mime || "");
 }
 
-const recent = new Map();   // url -> time it was handed to Draco (sites that retry must not open many dialogs)
+const recent = new Map();   // url -> { t: time handed to Draco, ok: Draco took it } (sites that retry)
 
 // Windows: when the browser starts it loads its download history and fires onCreated for those
 // old entries too. Only a download that is running and began just now is a new one.
@@ -233,9 +233,17 @@ chrome.downloads.onCreated.addListener(async (item) => {
   if (!(await isNewDownload(item)) || !shouldCapture(item)) return;
   const url = item.finalUrl || item.url;
   const now = Date.now();
-  for (const [u, t] of recent) if (now - t > 60000) recent.delete(u);
-  if (recent.has(url)) return;          // same link again within a minute: leave it to the browser
-  recent.set(url, now);
+  for (const [u, r] of recent) if (now - r.t > 60000) recent.delete(u);
+  const seen = recent.get(url) || recent.get(item.url);
+  if (seen) {
+    // Same link again within a minute (some browsers, e.g. Brave, start a download twice).
+    // If Draco already has it, drop this copy too; if Draco refused it, leave it to the browser.
+    if (seen.ok) await dropBrowserDownload(item.id);
+    return;
+  }
+  const entry = { t: now, ok: true };   // assume taken while Draco checks, so a repeat is dropped
+  recent.set(url, entry);
+  if (item.url !== url) recent.set(item.url, entry);
   // Pause (not cancel) first: some downloads (POST forms, one-time links such as Google Drive)
   // can't be fetched again. Draco checks the link; only if it can download it do we cancel ours.
   await pauseBrowserDownload(item.id);
@@ -243,6 +251,7 @@ chrome.downloads.onCreated.addListener(async (item) => {
     referer: item.referrer || "", filename: (item.filename || "").split(/[\\/]/).pop(),
     size: item.totalBytes > 0 ? item.totalBytes : undefined, silent: state.quick, verify: true,
   });
+  entry.ok = !!reply.ok;
   if (reply.ok) {
     await dropBrowserDownload(item.id);
   } else {
