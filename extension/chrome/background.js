@@ -199,10 +199,33 @@ async function pauseBrowserDownload(id) {
 async function dropBrowserDownload(id) {
   try { await chrome.downloads.cancel(id); } catch (e) { /* already finished or gone */ }
   const d = await downloadState(id);
+  if (d && d.state === "in_progress") return;         // still running: makeSureGone finishes the job
   if (d && d.state === "complete" && d.exists !== false) {
     try { await chrome.downloads.removeFile(id); } catch (e) { /* ignore */ }
   }
   try { await chrome.downloads.erase({ id }); } catch (e) { /* ignore */ }
+}
+
+// Some browsers (Brave) ignore a cancel while they are still choosing the file name, and the
+// download then finishes anyway. Keep watching the browser's copy for a while: cancel it again
+// while it runs, delete the file if it finished, and remove it from the browser's list.
+function makeSureGone(id, ms = 30000) {
+  const until = Date.now() + ms;
+  const tick = async () => {
+    const d = await downloadState(id);
+    if (!d) return;                                    // erased: done
+    if (d.state === "in_progress") {
+      try { await chrome.downloads.cancel(id); } catch (e) { /* not cancellable yet */ }
+    } else {
+      if (d.state === "complete" && d.exists !== false) {
+        try { await chrome.downloads.removeFile(id); } catch (e) { /* ignore */ }
+      }
+      try { await chrome.downloads.erase({ id }); } catch (e) { /* ignore */ }
+      return;
+    }
+    if (Date.now() < until) setTimeout(tick, 400);
+  };
+  setTimeout(tick, 300);
 }
 
 // ---------------------------------------------------------------- fresh cookies for Draco
@@ -234,9 +257,12 @@ chrome.cookies.onChanged.addListener(({ removed }) => {
 // never opens the browser's save window and never starts in the browser at all. Firefox has no
 // such step, so there the download is paused right after it starts instead.
 const CAN_HOLD = !!(chrome.downloads.onDeterminingFilename);
+const handled = new Set();                      // download ids already being looked at
 
 async function capture(item, suggest) {
   const release = () => { if (suggest) { try { suggest(); } catch (e) { /* already decided */ } } };
+  if (handled.has(item.id)) return release();
+  handled.add(item.id);
   if (!(await isNewDownload(item)) || !shouldCapture(item)) return release();
   const url = item.finalUrl || item.url;
   const now = Date.now();
@@ -253,7 +279,7 @@ async function capture(item, suggest) {
   if (item.url !== url) recent.set(item.url, entry);
   // Hold (or pause) the browser's download, not cancel it: some downloads (POST forms, one-time
   // links such as Google Drive) can't be fetched again. Only if Draco can download it do we cancel.
-  if (!suggest) await pauseBrowserDownload(item.id);
+  await pauseBrowserDownload(item.id);          // also while held: stops the transfer during the check
   const reply = await sendToDraco(url, {
     referer: item.referrer || "", filename: (item.filename || "").split(/[\\/]/).pop(),
     size: item.totalBytes > 0 ? item.totalBytes : (item.fileSize > 0 ? item.fileSize : undefined),
@@ -263,22 +289,28 @@ async function capture(item, suggest) {
   if (reply.ok) {
     await dropBrowserDownload(item.id);
     release();
+    makeSureGone(item.id);
   } else {
     // Draco can't take it (not running, or the server refuses a second request): browser continues.
-    if (suggest) release();
-    else { try { await chrome.downloads.resume(item.id); } catch (e) { /* ignore */ } }
+    release();
+    try { await chrome.downloads.resume(item.id); } catch (e) { /* ignore */ }
     console.warn("Left to the browser:", reply.error);
   }
 }
+
+
 
 if (CAN_HOLD) {
   chrome.downloads.onDeterminingFilename.addListener((item, suggest) => {
     capture(item, suggest);
     return true;   // suggest() is called later, after Draco answered
   });
-} else {
-  chrome.downloads.onCreated.addListener((item) => { capture(item, null); });
 }
+// Every browser: also look at each new download here. On Chromium this only acts when the
+// file-name step above did not run for it (some downloads skip it), so nothing is handled twice.
+chrome.downloads.onCreated.addListener((item) => {
+  setTimeout(() => { if (!handled.has(item.id)) capture(item, null); }, CAN_HOLD ? 1200 : 0);
+});
 
 // ---------------------------------------------------------------- media sniffing
 function header(details, name) {
