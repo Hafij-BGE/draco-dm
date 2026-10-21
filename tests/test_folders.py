@@ -29,5 +29,18 @@ class FixedFolderTest(unittest.TestCase):
         self.assertEqual(self.s.folder_for("Video"), Path(self.tmp.name) / "dl" / "Video")
 
 
+
+class XdgDirTest(unittest.TestCase):
+    def test_home_with_trailing_slash_means_not_set(self):
+        import io
+        from unittest import mock
+        from draco import osdeps
+        for answer in (str(Path.home()) + "/\n", str(Path.home()) + "\n", ""):
+            with mock.patch("os.popen", return_value=io.StringIO(answer)):
+                self.assertEqual(osdeps._xdg_user_dir("DOCUMENTS", "Documents"), Path.home() / "Documents")
+        with mock.patch("os.popen", return_value=io.StringIO("/data/Docs\n")):
+            self.assertEqual(osdeps._xdg_user_dir("DOCUMENTS", "Documents"), Path("/data/Docs"))
+
+
 if __name__ == "__main__":
     unittest.main()

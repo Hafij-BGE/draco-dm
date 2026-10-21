@@ -37,7 +37,7 @@ def popen_kwargs():
 def _xdg_user_dir(kind, fallback):
     try:
         out = os.popen(f"xdg-user-dir {kind} 2>/dev/null").read().strip()
-        if out and out != str(Path.home()):
+        if out and Path(out) != Path.home():   # "$HOME/" (with a slash) also means "not set"
             return Path(out)
     except OSError:
         pass
