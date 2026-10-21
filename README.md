@@ -19,7 +19,7 @@ Multi-connection downloads, browser capture, YouTube and streaming video. No acc
 [Video & YouTube](#video-youtube-and-subtitles) ·
 [Build from source](#build-from-source)
 
-<img src="docs/screenshots/main-classic.png" alt="Draco main window with downloads in progress" width="900">
+<img src="docs/screenshots/dashboard-galaxy-explorer.jpg" alt="Draco with the Galaxy Explorer dashboard theme" width="900">
 
 </div>
 
@@ -30,7 +30,7 @@ Multi-connection downloads, browser capture, YouTube and streaming video. No acc
 - 🌐 **Browser capture** for Chrome, Edge, Brave, Opera, Vivaldi and Firefox, including snap and Flatpak browsers. Cookies and referrer are passed along, so logged-in downloads work.
 - 🎬 **Video downloads** from YouTube and 1000+ sites, plus HLS/DASH streams, with the size of every quality shown before you choose.
 - 🗂️ **Queues, scheduler, categories, speed limiter**, site grabber, batch downloads and a clipboard watcher.
-- 🎨 **14 themes** with matching icon styles, from a classic desktop look to *Galaxy* and *Midnight*.
+- 🎨 **18 themes**: 4 dashboard themes (*Galaxy Explorer*, *Cosmic Minimal*, *Nebula Glow*, *Aurora Light*) with a stats header, speed graph and in-app progress pane, plus 14 classic themes.
 - 🪶 **Lightweight and private.** Python 3 + GTK 4/libadwaita, standard library only. No telemetry, no ads.
 
 ## Install
@@ -116,15 +116,33 @@ After an update, Draco refreshes its copy of the extension. Click **Reload** on 
 
 ## Themes
 
-Switch instantly under **View → Theme** or with the palette button in the toolbar. The themes are *Follow desktop*, *Draco Classic*, *Retro Gray*, *Soft Light*, *Galaxy*, *Dark*, *Midnight Blue*, *Nightshade*, *Arctic Frost*, *Sand Light*, *Deep Teal*, *Forest*, *Sunset* and *High Contrast*.
+Switch instantly under **View → Theme** or with the palette button.
 
-Each theme brings matching icons. To override them, use **View → Icon Style**: *Colourful*, *Flat*, *Monochrome* or *Accent colour*.
+**Dashboard themes:** *Galaxy Explorer*, *Cosmic Minimal*, *Nebula Glow* and *Aurora Light* change the whole window:
+- a header with a live total-speed graph and Active / Completed / Queued rings
+- category and queue counts in the sidebar
+- All / Downloading / Completed tabs, and a progress bar in every row
+- a details pane that shows the full progress of open downloads as tabs
 
 <div align="center">
-<img src="docs/screenshots/main-galaxy.png" alt="Draco with the Galaxy theme" width="760">
+<img src="docs/screenshots/dashboard-aurora-light.jpg" alt="Draco with the Aurora Light dashboard theme" width="760">
 </div>
 
-To add your own theme, copy an entry in `THEMES` in `draco/gui/style.py` and change its colours.
+In these themes, each file type gets its own progress look: *Galaxy Explorer*, *Starlight Forest* (documents), *Aurora Music*, *Cinematic Horizon* (video) and *Nebula Archive* (compressed). Choose the look per category in **Options → Save To → Categories → Progress look**.
+
+To see progress inside Draco or in separate windows, use **Options → General → Show download progress**.
+
+<div align="center">
+<img src="docs/screenshots/progress-looks.jpg" alt="Progress windows: Galaxy Explorer, Starlight Forest, Aurora Music, Cinematic Horizon, Nebula Archive" width="900">
+</div>
+
+**Classic themes:** *Follow desktop*, *Draco Classic*, *Retro Gray*, *Soft Light*, *Galaxy*, *Dark*, *Midnight Blue*, *Nightshade*, *Arctic Frost*, *Sand Light*, *Deep Teal*, *Forest*, *Sunset* and *High Contrast* keep the menu-bar layout. They come with matching icons; **View → Icon Style** overrides them.
+
+<div align="center">
+<img src="docs/screenshots/main-classic.png" alt="Draco Classic theme" width="760">
+</div>
+
+To add your own theme, copy an entry in `THEMES` (classic) or `MODERN` (dashboard) in `draco/gui/style.py`. The dashboard pictures are made by `tools/make_theme_art.py`.
 
 ## Command line
 
@@ -176,7 +194,8 @@ draco/ipc.py         single instance + CLI (Unix socket, or TCP with a token on 
 draco/bridge.py      loopback HTTP bridge for snap/Flatpak browsers (paired with a token)
 draco/native.py      native-messaging host registration (Linux and Windows)
 draco/osdeps.py      platform helpers: folders, autostart, opening files
-draco/gui/           GTK 4 / libadwaita windows, dialogs, themes and the top-bar icon
+draco/gui/           GTK 4 / libadwaita windows, dialogs, themes, dashboard layout and the top-bar icon
+draco/art/           dashboard theme backgrounds and progress illustrations
 native_host/         the stdio host the browser starts
 extension/chrome/    browser extension (the Firefox variant is generated from it)
 packaging/           .deb, .rpm, Arch, AppImage, Flatpak, tarball and Windows installer

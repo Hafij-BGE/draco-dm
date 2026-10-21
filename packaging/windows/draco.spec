@@ -13,6 +13,7 @@ GI_CONFIG = {"gi": {"module-versions": {"Gtk": "4.0", "Gdk": "4.0", "Adw": "1"},
 
 datas = [
     (str(ROOT / "draco" / "icons"), "draco/icons"),          # toolbar/category icons + app icon
+    (str(ROOT / "draco" / "art"), "draco/art"),              # dashboard theme backgrounds + illustrations
     (str(ROOT / "extension"), "extension"),                   # browser extension, copied out on first run
     (str(ROOT / "native_host"), "native_host"),
 ]

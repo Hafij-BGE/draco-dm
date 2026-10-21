@@ -155,6 +155,98 @@ THEMES = {
         accent="#ffff00", accent_fg="#000000", ok="#00ff00", err="#ff4040", active="#00ffff", radius="0px")},
 }
 
+# ---------------------------------------------------------------- modern (dashboard) themes
+# These switch the main window to the dashboard layout (stats header, rounded cards, progress
+# column, details pane) and draw over a background picture from draco/art/.
+ART_DIR = Path(__file__).resolve().parent.parent / "art"
+
+
+def _modern(**kw):
+    base = dict(
+        dark=True, bg="bg-galaxy-explorer.jpg", base="#070a22", base2="#0b0f30",
+        panel="rgba(12,16,48,0.80)", panel_solid="#0e1338", border="rgba(110,130,255,0.28)",
+        fg="#e8ecff", dim="#9aa4d6", a1="#5a5cff", a2="#1fb8ff", accent="#5b7bff", accent_fg="#ffffff",
+        tile="rgba(22,28,80,0.72)", tile_hover="rgba(52,64,160,0.85)", tile_border="rgba(120,140,255,0.32)",
+        sel="rgba(78,96,255,0.34)", hover="rgba(90,110,255,0.12)", line="rgba(120,140,255,0.08)",
+        p1="#7b5cff", p2="#20c4ff", ok1="#18c964", ok2="#7dff9a", ok="#36e07a", err="#ff5b7b",
+        warn="#ffb020", active="#5aa8ff", glow="rgba(90,110,255,0.45)", trough="rgba(255,255,255,0.08)",
+        radius="14px", pw="galaxy", pct="#ffffff", pct_shadow="0 1px 2px rgba(0,0,0,0.6)",
+    )
+    base.update(kw)
+    return base
+
+
+MODERN = {
+    "galaxy-explorer": {"name": "Galaxy Explorer (dashboard)", **_modern()},
+    "cosmic-minimal": {"name": "Cosmic Minimal (dashboard)", **_modern(
+        bg="bg-cosmic-minimal.jpg", base="#060b1e", base2="#08102a", panel="rgba(9,15,38,0.92)",
+        panel_solid="#0a1230", border="rgba(80,120,220,0.25)", a1="#2f6bff", a2="#2f9bff",
+        tile="rgba(16,26,60,0.85)", tile_hover="rgba(36,60,130,0.9)", tile_border="rgba(80,120,220,0.3)",
+        glow="rgba(47,107,255,0.35)")},
+    "nebula-glow": {"name": "Nebula Glow (dashboard)", **_modern(
+        bg="bg-nebula-glow.jpg", base="#180626", base2="#260a3a", panel="rgba(32,10,54,0.74)",
+        panel_solid="#260a40", border="rgba(255,90,220,0.30)", fg="#fbeaff", dim="#c9a3dc",
+        a1="#ff4fd8", a2="#8a5cff", accent="#d75cff", tile="rgba(60,16,90,0.70)",
+        tile_hover="rgba(120,30,150,0.85)", tile_border="rgba(255,110,230,0.35)",
+        sel="rgba(220,80,255,0.32)", hover="rgba(255,90,220,0.12)", line="rgba(255,120,230,0.08)",
+        p1="#ff4fd8", p2="#8a5cff", glow="rgba(255,79,216,0.45)", active="#ff8ae8", pw="music")},
+    "aurora-light": {"name": "Aurora Light (dashboard)", **_modern(
+        dark=False, bg="bg-aurora-light.jpg", base="#eceeff", base2="#f6f4ff",
+        panel="rgba(255,255,255,0.76)", panel_solid="#f8f8ff", border="rgba(140,140,220,0.35)",
+        fg="#1d2140", dim="#6a6f95", a1="#6b5cff", a2="#3c8bff", accent="#5b5cff",
+        tile="rgba(255,255,255,0.85)", tile_hover="rgba(230,232,255,0.95)", tile_border="rgba(140,140,220,0.40)",
+        sel="rgba(108,92,255,0.18)", hover="rgba(108,92,255,0.08)", line="rgba(40,40,120,0.06)",
+        p1="#7b5cff", p2="#3c8bff", ok="#13a456", err="#e0344f", active="#3c6bff",
+        glow="rgba(108,92,255,0.25)", trough="rgba(40,40,120,0.10)", pw="compressed",
+        pct="#1d2140", pct_shadow="0 0 3px rgba(255,255,255,0.9)")},
+}
+
+# Progress-window looks per download category in the dashboard themes.
+PROGRESS_STYLES = {
+    "galaxy": dict(dark=True, art="ill-galaxy.png", bg="bg-galaxy-explorer.jpg", base="#070b26",
+                   panel="rgba(14,20,60,0.82)", border="rgba(90,140,255,0.40)", fg="#e8ecff", dim="#9aa4d6",
+                   a1="#6b4dff", a2="#1fb8ff", tile="rgba(22,30,80,0.80)", seg_bg="#13204a",
+                   seg_done="#2a8cff", seg_head="#ff8a1f", name="Galaxy Explorer"),
+    "documents": dict(dark=True, art="ill-documents.png", bg="pw-documents.jpg", base="#05221b",
+                      panel="rgba(6,40,32,0.84)", border="rgba(40,200,150,0.38)", fg="#e6fff6", dim="#8fcab5",
+                      a1="#13b878", a2="#12d6c8", tile="rgba(10,60,46,0.85)", seg_bg="#0b3a2e",
+                      seg_done="#16c98a", seg_head="#ffd54a", name="Starlight Forest"),
+    "music": dict(dark=True, art="ill-music.png", bg="pw-music.jpg", base="#17072c",
+                  panel="rgba(34,10,60,0.82)", border="rgba(255,80,200,0.38)", fg="#fdeaff", dim="#cf9fe0",
+                  a1="#ff3d9a", a2="#9b4dff", tile="rgba(60,16,96,0.85)", seg_bg="#2c0f4a",
+                  seg_done="#d24dff", seg_head="#ffd54a", name="Aurora Music"),
+    "video": dict(dark=True, art="ill-video.png", bg="pw-video.jpg", base="#1a0d07",
+                  panel="rgba(40,18,10,0.84)", border="rgba(255,140,50,0.40)", fg="#fff1e6", dim="#e0b090",
+                  a1="#ff6a1a", a2="#ffc040", tile="rgba(70,32,14,0.85)", seg_bg="#3a1d0e",
+                  seg_done="#ff8a1f", seg_head="#fff06a", name="Cinematic Horizon"),
+    "compressed": dict(dark=False, art="ill-compressed.png", bg="pw-compressed.jpg", base="#eef0ff",
+                       panel="rgba(255,255,255,0.84)", border="rgba(120,120,230,0.40)", fg="#1d2140",
+                       dim="#6a6f95", a1="#5b4dff", a2="#7b8bff", tile="rgba(240,242,255,0.95)",
+                       seg_bg="#dfe2fb", seg_done="#5b5cff", seg_head="#ff8a1f", name="Nebula Archive"),
+}
+CATEGORY_PROGRESS = {"Documents": "documents", "Music": "music", "Video": "video", "Compressed": "compressed"}
+
+
+def is_modern(key):
+    return key in MODERN
+
+
+def progress_style(theme, category, chosen=None):
+    """Which progress look a download gets (None = the plain classic window). `chosen` is the
+    user's choice per category from Options (missing or "auto" = the built-in pick)."""
+    if not is_modern(theme):
+        return None
+    pick = (chosen or {}).get(category or "General", "auto")
+    if pick in PROGRESS_STYLES:
+        return pick
+    return CATEGORY_PROGRESS.get(category) or MODERN[theme]["pw"]
+
+
+def seg_colors(pstyle):
+    p = PROGRESS_STYLES.get(pstyle or "")
+    return (p["seg_bg"], p["seg_done"], p["seg_head"]) if p else ("#e8edf3", "#3584e4", "#e66100")
+
+
 # ---------------------------------------------------------------- icon styles
 ICON_STYLES = [("auto", "Match theme"), ("color", "Colourful"), ("flat", "Flat"),
                ("mono", "Monochrome"), ("accent", "Accent colour")]
@@ -162,10 +254,11 @@ ICON_STYLES = [("auto", "Match theme"), ("color", "Colourful"), ("flat", "Flat")
 THEME_ICONS = {"system": "mono", "classic": "color", "retro": "color", "soft-light": "flat", "galaxy": "accent",
                "dark": "mono", "midnight": "accent", "nightshade": "accent", "arctic": "accent",
                "sand": "flat", "deep-teal": "accent", "forest": "flat", "sunset": "flat",
-               "high-contrast": "mono"}
+               "high-contrast": "mono", "galaxy-explorer": "color", "cosmic-minimal": "color",
+               "nebula-glow": "color", "aurora-light": "color"}
 def current_theme(key):
     """A saved theme name, or Draco Classic if it no longer exists (themes were renamed in 1.4.4)."""
-    return key if key in THEMES else "classic"
+    return key if key in THEMES or key in MODERN else "classic"
 # Line icons for the monochrome/accent styles (GTK recolours them to match the theme).
 SYMBOLIC = {
     "add-url": "list-add-symbolic", "resume": "media-playback-start-symbolic",
@@ -282,14 +375,182 @@ notebook.draco-tabs > header {{ background: {pane_bottom}; }}
 .draco-icons-accent image.draco-icon.danger {{ color: {err}; }}
 """
 
+MODERN_TEMPLATE = """
+@define-color window_bg_color {base};
+@define-color window_fg_color {fg};
+@define-color view_bg_color {panel_solid};
+@define-color view_fg_color {fg};
+@define-color headerbar_bg_color {base};
+@define-color headerbar_fg_color {fg};
+@define-color headerbar_backdrop_color {base};
+@define-color popover_bg_color {panel_solid};
+@define-color popover_fg_color {fg};
+@define-color dialog_bg_color {base2};
+@define-color dialog_fg_color {fg};
+@define-color card_bg_color {panel_solid};
+@define-color card_fg_color {fg};
+@define-color accent_bg_color {accent};
+@define-color accent_fg_color {accent_fg};
+@define-color accent_color {accent};
+@define-color sidebar_bg_color {panel_solid};
+@define-color sidebar_fg_color {fg};
+
+window.background {{ background: linear-gradient(160deg, {base} 0%, {base2} 100%); color: {fg}; }}
+window.dm-window {{
+  background-color: {base}; background-image: url("{bg_url}");
+  background-size: cover; background-position: center top; background-repeat: no-repeat;
+}}
+.dm-header {{ padding: 10px 14px 6px 14px; }}
+.dm-brand-title {{ font-size: 21pt; font-weight: 800; color: {fg}; }}
+.dm-brand-sub {{ font-size: 12pt; color: {fg}; }}
+.dm-brand-tag {{ font-size: 9pt; color: {a2}; }}
+.dm-tiles {{ margin-top: 4px; }}
+button.dm-tile {{
+  min-width: 74px; min-height: 66px; padding: 4px 6px; border-radius: 12px; color: {fg};
+  background: {tile}; border: 1px solid {tile_border}; box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+}}
+button.dm-tile:hover {{ background: {tile_hover}; box-shadow: 0 0 14px {glow}; }}
+button.dm-tile:disabled {{ opacity: 0.45; }}
+button.dm-tile label {{ font-size: 9.5pt; }}
+button.dm-tile.primary {{
+  background: linear-gradient(135deg, {a1}, {a2}); color: #ffffff; border-color: transparent;
+  box-shadow: 0 0 18px {glow};
+}}
+button.dm-icon-btn {{
+  min-width: 38px; min-height: 38px; border-radius: 10px; background: {tile}; border: 1px solid {tile_border};
+}}
+button.dm-icon-btn:hover {{ background: {tile_hover}; }}
+.dm-card {{
+  background: {panel}; border: 1px solid {border}; border-radius: {radius};
+  box-shadow: 0 4px 22px rgba(0,0,0,0.30);
+}}
+.dm-stat-title {{ color: {dim}; font-size: 9.5pt; }}
+.dm-stat-value {{ font-size: 18pt; font-weight: 800; color: {fg}; }}
+.dm-ring-label {{ font-size: 9pt; color: {dim}; }}
+.dm-ring-num {{ font-size: 13pt; font-weight: 800; color: {fg}; }}
+
+.dm-side {{ padding: 8px; }}
+.dm-side list {{ background: none; color: {fg}; }}
+.dm-side row {{ border-radius: 10px; padding: 6px 8px; margin: 1px 0; }}
+.dm-side row:hover:not(:selected) {{ background: {hover}; }}
+.dm-side row:selected {{ background: linear-gradient(90deg, {a1}, {a2}); color: #ffffff; box-shadow: 0 0 12px {glow}; }}
+.dm-side row:selected label {{ color: #ffffff; }}
+.dm-side-head {{ color: {dim}; font-weight: bold; font-size: 9.5pt; margin: 10px 8px 2px 8px; }}
+.dm-badge {{
+  background: {tile}; border: 1px solid {tile_border}; border-radius: 9px; padding: 0 8px;
+  font-size: 9pt; min-width: 18px;
+}}
+.dm-side row:selected .dm-badge {{ background: rgba(255,255,255,0.22); border-color: transparent; }}
+
+.dm-tabs togglebutton {{
+  border-radius: 10px; padding: 5px 14px; background: {tile}; border: 1px solid {tile_border}; color: {fg};
+}}
+.dm-tabs togglebutton:checked {{
+  background: linear-gradient(135deg, {a1}, {a2}); color: #ffffff; border-color: transparent;
+  box-shadow: 0 0 12px {glow};
+}}
+.dm-search, .dm-search > text {{ background: {tile}; border-radius: 10px; color: {fg}; }}
+
+columnview.dm-list {{ background: none; color: {fg}; }}
+columnview.dm-list > header > button {{
+  background: none; border: none; border-bottom: 1px solid {border}; color: {dim};
+  padding: 6px 8px; font-weight: normal; box-shadow: none;
+}}
+columnview.dm-list > listview {{ background: none; }}
+columnview.dm-list > listview > row {{ border-bottom: 1px solid {line}; min-height: 34px; }}
+columnview.dm-list > listview > row > cell {{ padding: 2px 8px; }}
+columnview.dm-list > listview > row:hover:not(:selected) {{ background: {hover}; }}
+columnview.dm-list > listview > row:selected {{ background: {sel}; color: {fg}; }}
+
+progressbar.dm-progress > trough {{ background: {trough}; border-radius: 8px; min-height: 16px; border: none; }}
+progressbar.dm-progress > trough > progress {{
+  background: linear-gradient(90deg, {p1}, {p2}); border-radius: 8px; min-height: 16px; border: none;
+}}
+progressbar.dm-progress.done > trough > progress {{ background: linear-gradient(90deg, {ok1}, {ok2}); }}
+progressbar.dm-progress.failed > trough > progress {{ background: {err}; }}
+.dm-pct {{ font-size: 8.5pt; font-weight: bold; color: {pct}; text-shadow: {pct_shadow}; }}
+.draco-status-complete {{ color: {ok}; }}
+.draco-status-error {{ color: {err}; }}
+.draco-status-active {{ color: {active}; font-weight: bold; }}
+
+.dm-status {{ padding: 8px 14px; margin: 0 12px 10px 12px; }}
+.dm-status-sep {{ background: {border}; min-width: 1px; margin: 4px 6px; }}
+.dm-dot {{ min-width: 12px; min-height: 12px; border-radius: 6px; background: {ok}; }}
+switch:checked {{ background: linear-gradient(90deg, {a1}, {a2}); }}
+
+.dm-details notebook > header {{ background: none; border: none; }}
+.dm-details notebook > header tab {{ border-radius: 10px 10px 0 0; padding: 4px 8px; }}
+.dm-details notebook > header tab:checked {{ background: linear-gradient(135deg, {a1}, {a2}); color: #ffffff; }}
+.dm-big-pct {{ font-size: 26pt; font-weight: 800; color: {fg}; }}
+.dm-details .pw-card {{ background: rgba(0,0,0,0.12); border: 1px solid {border}; border-radius: 12px; }}
+.dm-details .pw-pad {{ padding: 10px; }}
+.dm-details .pw-pct {{ color: {a2}; font-weight: bold; }}
+.dm-details .draco-dialog-head {{ color: {a2}; }}
+.dm-details button.pw-main {{ background: linear-gradient(135deg, {a1}, {a2}); color: #ffffff; }}
+
+.draco-dialog-head {{ font-size: 11pt; font-weight: bold; }}
+.draco-field-title {{ color: {dim}; }}
+.draco-conn-table label {{ font-family: monospace; font-size: 9pt; }}
+.draco-conn-table .head {{ font-weight: bold; font-family: sans-serif; }}
+popover.menu contents, popover > contents {{ background: {panel_solid}; color: {fg}; }}
+button.suggested-action {{ background: linear-gradient(135deg, {a1}, {a2}); color: #ffffff; }}
+{progress_css}
+"""
+
+PROGRESS_TEMPLATE = """
+window.pw-{key} {{
+  background-color: {base}; background-image: url("{bg_url}"); background-size: cover; color: {fg};
+}}
+window.pw-{key} headerbar {{ background: none; box-shadow: none; color: {fg}; }}
+window.pw-{key} .pw-title {{ font-size: 13pt; font-weight: bold; color: {fg}; }}
+window.pw-{key} .pw-pct {{ color: {a2}; font-weight: bold; }}
+window.pw-{key} notebook, window.pw-{key} notebook > stack {{ background: none; }}
+window.pw-{key} notebook > header {{ background: none; border: none; }}
+window.pw-{key} notebook > header tab {{
+  background: {tile}; border: 1px solid {border}; border-radius: 10px; margin: 0 3px 6px 0; padding: 6px 12px;
+  color: {fg};
+}}
+window.pw-{key} notebook > header tab:checked {{ background: linear-gradient(135deg, {a1}, {a2}); color: #ffffff; }}
+window.pw-{key} .pw-card {{ background: {panel}; border: 1px solid {border}; border-radius: 14px; }}
+window.pw-{key} .pw-pad {{ padding: 10px; }}
+window.pw-{key} .draco-dialog-head {{ color: {a2}; font-size: 13pt; }}
+window.pw-{key} .draco-field-title {{ color: {dim}; }}
+window.pw-{key} progressbar.dm-progress > trough > progress {{ background: linear-gradient(90deg, {a1}, {a2}); }}
+window.pw-{key} button {{ background: {tile}; border: 1px solid {border}; border-radius: 10px; color: {fg}; }}
+window.pw-{key} button.pw-main {{ background: linear-gradient(135deg, {a1}, {a2}); color: #ffffff; border-color: transparent; }}
+window.pw-{key} .draco-segbar {{ border: 1px solid {border}; border-radius: 6px; }}
+"""
+
 _provider = None
+_current = "classic"
+
+
+def current_palette():
+    """Colours of the active dashboard theme (None for the classic themes)."""
+    return MODERN.get(_current)
 
 
 def theme_names():
-    return [(key, t["name"]) for key, t in THEMES.items()]
+    return [(key, t["name"]) for key, t in THEMES.items()] + [(key, t["name"]) for key, t in MODERN.items()]
+
+
+def _art_url(name):
+    return (ART_DIR / name).as_uri()
+
+
+def progress_css():
+    out = []
+    for key, pal in PROGRESS_STYLES.items():
+        out.append(PROGRESS_TEMPLATE.format(key=key, bg_url=_art_url(pal["bg"]), **pal))
+    return "".join(out)
 
 
 def css_for(key):
+    if key in MODERN:
+        vals = dict(MODERN[key])
+        vals["bg_url"] = _art_url(vals["bg"])
+        vals["progress_css"] = progress_css()
+        return MODERN_TEMPLATE.format(**vals)
     t = THEMES.get(key)
     if not t or key == "system":
         return ""
@@ -301,9 +562,10 @@ def css_for(key):
 
 def apply_theme(key):
     """Switch the whole app to a theme (works while running)."""
-    global _provider
+    global _provider, _current
+    _current = key
     display = Gdk.Display.get_default()
-    t = THEMES.get(key) or THEMES["classic"]
+    t = MODERN.get(key) or THEMES.get(key) or THEMES["classic"]
     sm = Adw.StyleManager.get_default()
     if key == "system":
         sm.set_color_scheme(Adw.ColorScheme.DEFAULT)
@@ -312,7 +574,7 @@ def apply_theme(key):
     if _provider is None:
         _provider = Gtk.CssProvider()
         Gtk.StyleContext.add_provider_for_display(display, _provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
-    _provider.load_from_string(css_for(key if key in THEMES else "classic"))
+    _provider.load_from_string(css_for(key if key in THEMES or key in MODERN else "classic"))
 
 
 def setup(theme="classic"):

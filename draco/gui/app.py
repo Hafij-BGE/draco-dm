@@ -118,6 +118,7 @@ class DracoApp(Adw.Application):
             a = self.window.lookup_action("theme")
             if a and a.get_state().get_string() != key:
                 a.set_state(GLib.Variant.new_string(key))
+            self.window.apply_layout()
             self.window.apply_icons()
 
     def _register_browsers(self):
@@ -416,6 +417,10 @@ class DracoApp(Adw.Application):
 
     def show_progress(self, item):
         self._progress_seen.add(item["id"])
+        if self.settings.get("progress_view", "app") == "app" and self.window and self.window.layout == "modern":
+            self.show_main()
+            self.window.open_detail(item, pin=True)
+            return
         w = self.progress_windows.get(item["id"])
         if not w:
             w = ProgressWindow(self, item)
@@ -444,7 +449,12 @@ class DracoApp(Adw.Application):
         RefreshAddressDialog(self, item)
 
     def refresh_sidebar(self):
-        if self.window:
+        if not self.window:
+            return
+        if self.window.layout == "modern":
+            self.window.layout = None          # categories/queues changed: rebuild the dashboard
+            self.window.apply_layout()
+        else:
             self.window._populate_sidebar()
 
     # ---------------------------------------------------------- events

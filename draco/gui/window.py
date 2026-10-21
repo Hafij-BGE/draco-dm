@@ -9,6 +9,7 @@ from gi.repository import Adw, Gdk, Gio, GLib, GObject, Gtk  # noqa: E402
 from .. import APP_NAME  # noqa: E402
 from ..manager import ACTIVE  # noqa: E402
 from . import style, util  # noqa: E402
+from .modern import ModernLayout  # noqa: E402
 from .util import fmt_eta, fmt_size, fmt_speed, fmt_time  # noqa: E402
 
 
@@ -58,7 +59,7 @@ def _cmp(a, b):
     return Gtk.Ordering.SMALLER if a < b else (Gtk.Ordering.LARGER if a > b else Gtk.Ordering.EQUAL)
 
 
-class MainWindow(Adw.ApplicationWindow):
+class MainWindow(ModernLayout, Adw.ApplicationWindow):
     def __init__(self, app):
         super().__init__(application=app, title=APP_NAME)
         self.app = app
@@ -68,8 +69,50 @@ class MainWindow(Adw.ApplicationWindow):
         self.objs = {}
         self.store = Gio.ListStore(item_type=DownloadObj)
         self.filter_key = ("all", None)
+        self.tab_key = "all"
+        self.layout = None
 
         self._build_actions()
+        self.toast_overlay = Adw.ToastOverlay()
+        self.set_content(self.toast_overlay)
+        self.apply_layout()
+
+        for it in self.manager.items.values():
+            self._add_obj(it)
+
+        drop = Gtk.DropTarget.new(GObject.TYPE_STRING, Gdk.DragAction.COPY)
+        drop.connect("drop", self._on_drop)
+        self.add_controller(drop)
+
+        self._changed = set()
+        self.manager.listeners.append(self._on_manager_event)
+        GLib.timeout_add(500, self._tick)
+        self.connect("close-request", self._on_close)
+        self._update_actions()
+
+    # ------------------------------------------------------------------ UI
+    def apply_layout(self):
+        """Classic menu-bar layout, or the dashboard for the dashboard themes. Rebuilt on theme change."""
+        want = "modern" if style.is_modern(self.app.settings.get("theme")) else "classic"
+        if want == self.layout:
+            return
+        self.layout = want
+        self.detail_views = []
+        if want == "modern":
+            self.add_css_class("dm-window")
+            content = self._build_modern()
+            if self.get_default_size()[0] < 1500:
+                self.set_default_size(1600, 900)
+        else:
+            self.remove_css_class("dm-window")
+            content = self._build_classic()
+        self.toast_overlay.set_child(content)
+        self.side_pane.set_visible(self.app.settings.get("show_categories", True))
+        self.toolbar.set_visible(self.app.settings.get("show_toolbar", True))
+        self.apply_icons()
+        self._update_actions()
+
+    def _build_classic(self):
         view = Adw.ToolbarView(top_bar_style=Adw.ToolbarStyle.FLAT)
         header = Adw.HeaderBar(title_widget=Adw.WindowTitle(title=APP_NAME))
         palette = Gio.Menu()
@@ -94,27 +137,14 @@ class MainWindow(Adw.ApplicationWindow):
         self.paned.set_end_child(self._build_list())
         view.set_content(self.paned)
         view.add_bottom_bar(self._build_statusbar())
-        self.toast_overlay = Adw.ToastOverlay(child=view)
-        self.set_content(self.toast_overlay)
-        self.side_pane.set_visible(self.app.settings.get("show_categories", True))
-        self.apply_icons()
-        self.toolbar.set_visible(self.app.settings.get("show_toolbar", True))
+        return view
 
-        for it in self.manager.items.values():
-            self._add_obj(it)
-
-        drop = Gtk.DropTarget.new(GObject.TYPE_STRING, Gdk.DragAction.COPY)
-        drop.connect("drop", self._on_drop)
-        self.add_controller(drop)
-
-        self._changed = set()
-        self.manager.listeners.append(self._on_manager_event)
-        GLib.timeout_add(500, self._tick)
-        self.connect("close-request", self._on_close)
-        self._update_actions()
-
-    # ------------------------------------------------------------------ UI
     def _build_menubar(self):
+        bar = Gtk.PopoverMenuBar.new_from_model(self._build_menu_model())
+        bar.add_css_class("draco-menubar")
+        return bar
+
+    def _build_menu_model(self):
         root = Gio.Menu()
 
         def sub(label, *sections):
@@ -165,9 +195,7 @@ class MainWindow(Adw.ApplicationWindow):
         sub("_Help",
             [("Browser Integration…", "app.browser-integration")],
             [("About Draco Download Manager", "app.about")])
-        bar = Gtk.PopoverMenuBar.new_from_model(root)
-        bar.add_css_class("draco-menubar")
-        return bar
+        return root
 
     def _build_toolbar(self):
         self._tool_icons = []
@@ -284,7 +312,9 @@ class MainWindow(Adw.ApplicationWindow):
             self.remove_css_class(f"draco-icons-{key}")
         self.add_css_class(f"draco-icons-{icon_style}")
         line = icon_style in ("mono", "accent")
-        for icons, big, small in ((self._tool_icons, 32, 26), (getattr(self, "_side_icons", []), 20, 16)):
+        side = (22, 18) if self.layout == "modern" else (20, 16)
+        tool = (30, 26) if self.layout == "modern" else (32, 26)
+        for icons, big, small in ((self._tool_icons, *tool), (getattr(self, "_side_icons", []), *side)):
             for img, base in icons:
                 img.set_from_icon_name(style.icon_name(base, icon_style))
                 img.set_pixel_size(small if line else big)
@@ -353,13 +383,17 @@ class MainWindow(Adw.ApplicationWindow):
         f.connect("unbind", lambda f, li: li._b.unbind())
         return f
 
-    def _name_factory(self):
+    def _name_factory(self, icon_size=16, end_ellipsis=False):
         f = Gtk.SignalListItemFactory()
 
         def setup(f, li):
             box = Gtk.Box(spacing=6)
-            box.append(Gtk.Image(pixel_size=16))
-            box.append(util.label())
+            box.append(Gtk.Image(pixel_size=icon_size))
+            lb = util.label()
+            if end_ellipsis:
+                from gi.repository import Pango
+                lb.set_ellipsize(Pango.EllipsizeMode.END)
+            box.append(lb)
             li.set_child(box)
 
         def bind(f, li):
@@ -661,7 +695,7 @@ class MainWindow(Adw.ApplicationWindow):
         it = obj.item
         if it["status"] == "complete":
             util.open_path(util.file_path(it))
-        else:
+        elif not self.open_detail(it, pin=True):
             self.app.show_progress(it)
 
     def _on_drop(self, target, value, x, y):
@@ -717,6 +751,11 @@ class MainWindow(Adw.ApplicationWindow):
         text = self.search.get_text().strip().lower() if hasattr(self, "search") else ""
         if text and text not in (it.get("filename") or "").lower() and text not in it["url"].lower():
             return False
+        if self.layout == "modern" and self.tab_key != "all":
+            if self.tab_key == "completed" and it["status"] != "complete":
+                return False
+            if self.tab_key == "downloading" and it["status"] not in ACTIVE:
+                return False
         kind, val = self.filter_key
         if kind == "cat":
             return it.get("category") == val
@@ -761,6 +800,10 @@ class MainWindow(Adw.ApplicationWindow):
             obj = self.objs.get(item_id)
             if obj:
                 obj.refresh()
+        if self.layout == "modern":
+            self._modern_tick()
+            self.manager.save_if_dirty()
+            return True
         active = [i for i in self.manager.items.values() if i["status"] in ACTIVE]
         speed = sum(i.get("speed", 0) or 0 for i in active)
         running = [q for q, r in self.manager.queue_running.items() if r]

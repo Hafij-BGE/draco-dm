@@ -56,6 +56,12 @@ class PrefsDialog(Adw.PreferencesDialog):
         self.rows["ask_location_for_captures"].set_subtitle(
             "Shows the File Info dialog even when Quick capture is on in the extension")
         self._switch(g, "show_progress_dialog", "Show the progress window when a download starts")
+        self.progress_view = Adw.ComboRow(
+            title="Show download progress",
+            subtitle="Dashboard themes can show the full progress inside Draco's details pane",
+            model=Gtk.StringList.new(["Inside Draco (details pane)", "In a separate window"]))
+        self.progress_view.set_selected(0 if s.get("progress_view", "app") == "app" else 1)
+        g.add(self.progress_view)
         self._switch(g, "show_complete_dialog", "Show the download complete dialog")
         self._switch(g, "notify", "Desktop notification when a download finishes")
         self._switch(g, "sound", "Play a sound when a download finishes")
@@ -107,16 +113,34 @@ class PrefsDialog(Adw.PreferencesDialog):
         g.add(self.fixed_row)
         self._show_fixed()
         p.add(g)
-        g = Adw.PreferencesGroup(title="Categories", description="Extensions are separated by spaces")
+        g = Adw.PreferencesGroup(title="Categories",
+                                 description="Extensions are separated by spaces. The progress look applies "
+                                             "to the dashboard themes (Galaxy Explorer, Nebula Glow, …)")
         self.cat_rows = []
+        self.look_rows = {}
+        looks = [("auto", "Automatic")] + [(k, v["name"]) for k, v in style.PROGRESS_STYLES.items()]
+        self.look_keys = [k for k, _ in looks]
+        chosen = s.get("progress_styles") or {}
+
+        def look_row(name):
+            row = Adw.ComboRow(title="Progress look", model=Gtk.StringList.new([n for _, n in looks]))
+            pick = chosen.get(name, "auto")
+            row.set_selected(self.look_keys.index(pick) if pick in self.look_keys else 0)
+            self.look_rows[name] = row
+            return row
+
         for cat in s["categories"]:
             exp = Adw.ExpanderRow(title=cat["name"])
             ext = Adw.EntryRow(title="Extensions", text=cat["exts"])
             fol = Adw.EntryRow(title="Folder (empty = default)", text=cat.get("folder", ""))
             exp.add_row(ext)
             exp.add_row(fol)
+            exp.add_row(look_row(cat["name"]))
             g.add(exp)
             self.cat_rows.append((cat, ext, fol))
+        exp = Adw.ExpanderRow(title="General", subtitle="Files of any other type")
+        exp.add_row(look_row("General"))
+        g.add(exp)
         p.add(g)
         self.add(p)
 
@@ -196,6 +220,9 @@ class PrefsDialog(Adw.PreferencesDialog):
                 s[key] = row.get_text().strip()
         s["queues"][0]["max_active"] = int(self.rows["max_active"].get_value())
         s["duplicate_action"] = "overwrite" if self.dup.get_selected() == 1 else "rename"
+        s["progress_view"] = "app" if self.progress_view.get_selected() == 0 else "window"
+        s["progress_styles"] = {name: self.look_keys[row.get_selected()] for name, row in self.look_rows.items()
+                                if self.look_keys[row.get_selected()] != "auto"}
         for cat, ext, fol in self.cat_rows:
             cat["exts"] = " ".join(ext.get_text().lower().replace(",", " ").split())
             cat["folder"] = fol.get_text().strip()
