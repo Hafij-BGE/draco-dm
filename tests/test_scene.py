@@ -63,7 +63,23 @@ class MotionTest(unittest.TestCase):
         for _ in range(90):
             m.update(1 / 30)
         self.assertLess(m.flow, 0.01)
+        self.assertLess(m.active, 0.01)
         self.assertGreater(m.hold, 0.95)
+
+    def test_jumpy_speed_keeps_motion_steady(self):
+        m = SceneMotion()
+        m.set_state(scene_state(item("downloading", 0.5, 3 * MB)))
+        for _ in range(90):
+            m.update(1 / 30)
+        seen = []
+        for k in range(300):                       # speed jumping between 0.3 and 12 MB/s every 0.5 s
+            if k % 15 == 0:
+                m.set_state(scene_state(item("downloading", 0.5, (12 if k % 30 else 0.3) * MB)))
+            m.update(1 / 30)
+            seen.append((m.active, m.flow))
+        self.assertTrue(all(a > 0.99 for a, _ in seen))
+        flows = [f for _, f in seen[60:]]
+        self.assertLess(max(flows) - min(flows), 0.15)
 
     def test_completed_settles(self):
         m = SceneMotion()

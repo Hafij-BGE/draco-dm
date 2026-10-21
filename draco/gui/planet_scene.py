@@ -26,7 +26,16 @@ from .widgets import HAS_PATHS  # noqa: E402
 
 FPS = 30                        # while a download moves
 CALM_FPS = 15                   # nothing selected, paused, completed, error
-MIN_HEIGHT = 60                 # less room than this: draw nothing (no thin strip under the details)
+OVERLAP = 70                    # the planet's area reaches this far up behind the tab's content
+MIN_FREE = 40                   # less free room than this below the content: draw nothing
+
+
+def geometry(w, h, top):
+    """Planet centre and radius: low in the pane, under the content that ends at `top`."""
+    top0 = max(0.0, top - OVERLAP)
+    avail = h - top0
+    R = max(24.0, min(avail / 2.75, w * 0.19, 96.0))
+    return w / 2, top0 + avail / 2, R, top0
 STATIC_T = 40.0                 # moment shown as the still picture
 FRAMES, COLS, FRAME = 96, 12, 200
 HAS_MASK = hasattr(Gtk.Snapshot, "push_mask")
@@ -146,6 +155,7 @@ class Planet:
         self.gather = [(rng.random() * 6.3, 1.2 + rng.random() * 1.6, rng.random()) for _ in range(26)]
         self.turn = 0.0
         self.spin = 0.0
+        self.top0 = 0.0
         self._field = None
         self._twinkle = []
         self._field_key = None
@@ -159,13 +169,13 @@ class Planet:
         for r in self.rocks:
             r["a"] += dt * r["spin"]
             r["y"] = (r["y"] + dt * r["drift"]) % 1.0
-        self.orbit = [(k, a + dt * s * (0.35 + 0.9 * m.flow + 0.8 * m.speedy) * slow, s) for k, a, s in self.orbit]
+        self.orbit = [(k, a + dt * s * (0.35 + 0.9 * m.active + 0.8 * m.speedy) * slow, s) for k, a, s in self.orbit]
         rate = m.flow * (10 + 16 * m.speedy + 24 * m.tight)
         if len(self.inflow) < 60 and rng.random() < rate * dt:
             self.inflow.append([rng.random() * 6.3, 2.3 + rng.random() * 0.4, 0.6 + rng.random() * 0.6])
         keep = []
         for p in self.inflow:
-            p[1] -= dt * (0.45 + 0.6 * m.flow + 1.4 * m.tight) * p[2]
+            p[1] -= dt * (0.45 + 0.6 * m.active + 1.4 * m.tight) * p[2]
             p[0] += dt * (0.9 + 1.2 * m.tight) / max(p[1], 0.4)
             if p[1] > 1.02:
                 keep.append(p)
@@ -176,7 +186,7 @@ class Planet:
         srate = m.flow * (0.5 + 7 * m.speedy + 1.5 * m.tight)
         if len(self.streaks) < 16 and rng.random() < srate * dt:
             ang = math.radians(rng.uniform(20, 38))             # top-left to bottom-right
-            self.streaks.append([rng.uniform(-0.3, 0.7) * w, -10.0, ang, rng.uniform(30, 80), 1.0])
+            self.streaks.append([rng.uniform(-0.3, 0.7) * w, self.top0 - 10.0, ang, rng.uniform(30, 80), 1.0])
         keep = []
         for s in self.streaks:
             v = 260 + 260 * m.speedy
@@ -187,13 +197,14 @@ class Planet:
         self.streaks = keep
 
     # -------------------------------------------------- layers
-    def sky(self, snap, w, h, t, m, light):
-        """Everything behind the planet, faded at the edges so it blends into the pane."""
+    def sky(self, snap, w, h, t, m, light, cx, cy, top0):
+        """Everything behind the planet, faded at the edges so it blends into the pane (and into
+        the details above it)."""
         ring, gl, tint = m.colors
-        cx, cy = w / 2, h / 2
+        vr = max(h - cy, 40.0) * 1.05
         if HAS_MASK:
             snap.push_mask(Gsk.MaskMode.ALPHA)
-            snap.append_radial_gradient(_rect(0, 0, w, h), _pt(cx, cy), w * 0.56, h * 0.62, 0, 1,
+            snap.append_radial_gradient(_rect(0, 0, w, h), _pt(cx, cy), w * 0.56, vr, 0, 1,
                                         [_stop(0, (1, 1, 1), 1), _stop(0.62, (1, 1, 1), 0.95), _stop(1, (1, 1, 1), 0)])
             snap.pop()
         if light:
@@ -203,7 +214,7 @@ class Planet:
             base0, base1 = _mix((0.03, 0.04, 0.13), tint, 0.30), (0.02, 0.03, 0.10)
             base0 = _mix(base0, (0.35, 0.12, 0.05), 0.45 * m.tight)
             base0 = _mix(base0, (0.24, 0.22, 0.52), 0.35 * m.calm)
-        snap.append_radial_gradient(_rect(0, 0, w, h), _pt(cx, cy), w * 0.6, h * 0.7, 0, 1,
+        snap.append_radial_gradient(_rect(0, 0, w, h), _pt(cx, cy), w * 0.6, vr * 1.1, 0, 1,
                                     [_stop(0, base0, 1), _stop(1, base1, 1)])
         for name, off, a, y in (("scene-nebula-a.png", t * 6, 0.55, 0.0), ("scene-nebula-b.png", -t * 4 + 300, 0.5, 0.1)):
             tex = _Art.get(name, self.redraw)
@@ -217,7 +228,7 @@ class Planet:
                     x += tw
                 snap.pop()
         # colour of the stage spreading around the planet
-        glow(snap, cx, cy, min(w, h) * (0.55 + 0.15 * m.speedy + 0.1 * m.tight), gl,
+        glow(snap, cx, cy, min(w, 2 * vr) * (0.55 + 0.15 * m.speedy + 0.1 * m.tight), gl,
              (0.18 if light else 0.32) + 0.18 * m.speedy + 0.3 * m.tight + 0.1 * m.calm)
         if self._field_key != (w, h, light):          # stars: built once per size, in groups
             star = (0.45, 0.5, 0.9) if light else (1, 1, 1)
@@ -242,17 +253,17 @@ class Planet:
                 snap.pop()
         for s in self.streaks:
             streak(snap, s[0], s[1], s[2], s[3], 1.6, _mix(ring, (1, 1, 1), 0.3 if not light else 0), 0.85)
-        self.asteroids(snap, w, h, light)
+        self.asteroids(snap, w, h, light, top0)
         if m.alarm > 0.01:                       # error: a restrained red glow, faded like the sky
-            glow(snap, cx, cy, max(w, h) * 0.6, (0.92, 0.25, 0.3), (0.22 if light else 0.32) * m.alarm)
+            glow(snap, cx, cy, max(w, 2 * vr) * 0.6, (0.92, 0.25, 0.3), (0.22 if light else 0.32) * m.alarm)
         if HAS_MASK:
             snap.pop()
 
-    def asteroids(self, snap, w, h, light):
+    def asteroids(self, snap, w, h, light, top0):
         body = (0.62, 0.64, 0.78) if light else (0.13, 0.14, 0.24)
         lit = (0.85, 0.86, 0.95) if light else (0.42, 0.44, 0.62)
         for r in self.rocks:
-            x, y, s = r["x"] * w, r["y"] * h, r["r"]
+            x, y, s = r["x"] * w, top0 + r["y"] * (h - top0), r["r"]
             if not HAS_PATHS:
                 glow(snap, x, y, s, body, 0.9, 0.7)
                 continue
@@ -275,7 +286,7 @@ class Planet:
         if not HAS_PATHS:
             return
         ring = m.colors[0]
-        bright = (0.35 + 0.35 * m.flow + 0.3 * m.speedy + 0.35 * m.tight + 0.15 * m.calm) * (1 - 0.5 * m.hold)
+        bright = (0.35 + 0.35 * m.active + 0.3 * m.speedy + 0.35 * m.tight + 0.15 * m.calm) * (1 - 0.5 * m.hold)
         if light:                               # deeper colour and stronger line on the pale sky
             ring = _mix(ring, (0.3, 0.25, 0.75), 0.35)
             bright = min(1.0, bright * 1.5)
@@ -289,7 +300,7 @@ class Planet:
                                _rgba(ring if light else _mix(ring, (1, 1, 1), 0.35), 0.85 * a))
         # data particles riding the rings
         c, s = math.cos(self.TILT), math.sin(self.TILT)
-        pa = (0.25 * (1 - m.calm) + 0.75 * m.flow + 0.3 * m.speedy) * (1 - 0.8 * m.hold) * (1 - m.alarm)
+        pa = (0.25 * (1 - m.calm) + 0.75 * m.active + 0.3 * m.speedy) * (1 - 0.8 * m.hold) * (1 - m.alarm)
         for k, ang, sp in self.orbit:
             if (math.sin(ang) < 0) != far:
                 continue
@@ -335,7 +346,7 @@ class Planet:
         for a, r, s in self.inflow:
             x, y = cx + math.cos(a) * r * R, cy + math.sin(a) * r * R * 0.55
             fade = min(1.0, (r - 1.0) * 2.5) * min(1.0, (2.6 - r) * 2)
-            glow(snap, x, y, 2.6 + s, ring, fade * m.flow, 0.3)
+            glow(snap, x, y, 2.6 + s, ring, fade * m.active, 0.3)
 
     def gathering(self, snap, cx, cy, R, t, m):
         """Initializing: specks drifting in and settling on the rings."""
@@ -397,10 +408,10 @@ class Planet:
             st.set_line_join(Gsk.LineJoin.ROUND)
             snap.append_stroke(chk.to_path(), st, _rgba((0.13, 0.75, 0.38), m.calm))
 
-    def draw(self, snap, w, h, t, m, light):
-        cx, cy = w / 2, h / 2
-        R = min(h * 0.30, w * 0.19)
-        self.sky(snap, w, h, t, m, light)
+    def draw(self, snap, w, h, t, m, light, geo):
+        cx, cy, R, top0 = geo
+        self.top0 = top0
+        self.sky(snap, w, h, t, m, light, cx, cy, top0)
         self.rings(snap, cx, cy, R, m, light, True)
         self.gathering(snap, cx, cy, R, t, m)
         self.planet(snap, cx, cy, R, t, m, light)
@@ -420,17 +431,16 @@ class _Area(Gtk.Widget):
     def __init__(self, owner):
         super().__init__(hexpand=True, vexpand=True)
         self.owner = owner
-        self._band = None
+        self._size = None
 
     def do_size_allocate(self, width, height, baseline):
-        band = (height >= 90, height >= 130)
-        if band != self._band:                  # labels change outside the layout pass
-            self._band = band
-            GLib.idle_add(lambda: (self.owner._fit(), False)[1])
+        if (width, height) != self._size:       # labels move outside the layout pass
+            self._size = (width, height)
+            GLib.idle_add(lambda: (self.owner._place(), False)[1])
 
     def do_snapshot(self, snap):
         w, h = self.get_width(), self.get_height()
-        if w > 2 and h >= MIN_HEIGHT:
+        if w > 2 and h - self.owner.top >= MIN_FREE:
             self.owner.paint(snap, w, h)
 
 
@@ -450,8 +460,11 @@ class PlanetScene(Gtk.Overlay):
         self.planet = Planet(self._redraw)
         self.area = _Area(self)
         self.set_child(self.area)
+        self.top = 0                            # where the tab's content ends (set by the details pane)
+        self._geo = None
+        self._gliding = False
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=0, halign=Gtk.Align.CENTER,
-                      valign=Gtk.Align.CENTER)
+                      valign=Gtk.Align.START)
         box.set_can_target(False)
         self.big = Gtk.Label()
         self.big.add_css_class("ps-big")
@@ -468,6 +481,41 @@ class PlanetScene(Gtk.Overlay):
     def _redraw(self):
         self.area.queue_draw()
 
+    def set_top(self, top):
+        """The details pane tells where its content ends; the planet goes below (and behind) it.
+        Changes of a few pixels are ignored so the planet never shakes."""
+        if abs(top - self.top) > 4:
+            self.top = top
+            self._place()
+            self.area.queue_draw()
+
+    def _geometry(self, w, h):
+        """Planet place and size, gliding to a new spot instead of jumping (and ignoring tiny
+        size changes of the pane)."""
+        target = geometry(w, h, self.top)
+        g = self._geo
+        if g is None or not self._tick_id or max(abs(a - b) for a, b in zip(g, target)) > 120:
+            self._geo = target
+        elif max(abs(a - b) for a, b in zip(g, target)) > 4 or self._gliding:
+            self._gliding = True
+            self._geo = tuple(a + (b - a) * 0.2 for a, b in zip(g, target))
+            if max(abs(a - b) for a, b in zip(self._geo, target)) < 0.5:
+                self._geo, self._gliding = target, False
+        return self._geo
+
+    def _place(self):
+        w, h = self.area.get_width(), self.area.get_height()
+        if w < 2 or h < 2:
+            return
+        if self._geo is None or not self._tick_id:
+            self._geometry(w, h)
+        cx, cy, R, _ = self._geo
+        self.text.set_visible(R >= 40 and h - self.top >= MIN_FREE)
+        self._labels(R)
+        # the labels' own heights (the box's measure would include the margin set here)
+        nat = sum(lb.measure(Gtk.Orientation.VERTICAL, -1)[1] for lb in (self.big, self.small) if lb.get_visible())
+        self.text.set_margin_top(max(0, int(cy - nat / 2)))
+
     def reload_settings(self):
         self.set_visible(bool(self.app.settings.get("details_animation", True)))
         self._sync_ticking()
@@ -482,7 +530,7 @@ class PlanetScene(Gtk.Overlay):
             self.area.queue_draw()
         self._labels()
 
-    def _labels(self):
+    def _labels(self, R=None):
         st = self.motion.state
         stage = st.stage
         light = not style.is_dark()
@@ -493,7 +541,9 @@ class PlanetScene(Gtk.Overlay):
         self.big.set_visible(show_pct)
         self.small.set_text(st.label)
         # spinner / check are drawn above the text
-        self.small.set_margin_top(int(self.area.get_height() * 0.12) if stage in ("initializing", "completed") else 0)
+        if R is None:
+            R = (self._geo or geometry(self.area.get_width(), self.area.get_height(), self.top))[2]
+        self.small.set_margin_top(int(R * 0.3) if stage in ("initializing", "completed") else 0)
         name = (self.item or {}).get("filename") or ""
         self.area.update_property([Gtk.AccessibleProperty.LABEL],
                                   [f"{st.label} {self.big.get_text()} {name}".strip()])
@@ -521,7 +571,7 @@ class PlanetScene(Gtk.Overlay):
             self._last = now
             return GLib.SOURCE_CONTINUE
         busy = self.motion.state.stage in ("initializing", "downloading", "highspeed", "finalizing") \
-            or self.motion.flow > 0.02
+            or self.motion.active > 0.02
         if now - self._last < 1 / (FPS if busy else CALM_FPS) - 0.004:
             return GLib.SOURCE_CONTINUE
         root = widget.get_root()
@@ -530,7 +580,7 @@ class PlanetScene(Gtk.Overlay):
             return GLib.SOURCE_CONTINUE
         dt = min(0.1, now - self._last)
         self._last = now
-        if widget.get_height() < MIN_HEIGHT:   # nothing shown: no work
+        if widget.get_height() - self.top < MIN_FREE:   # nothing shown: no work
             return GLib.SOURCE_CONTINUE
         self.t += dt
         stage = self.motion.state.stage
@@ -539,16 +589,11 @@ class PlanetScene(Gtk.Overlay):
             self.planet.step(dt, self.motion, widget.get_width(), widget.get_height())
         except Exception as e:
             self._fail(e)
-        if self.motion.state.stage != stage:
-            self._labels()
+        if self.motion.state.stage != stage or self._gliding:
+            self._place()
         widget.queue_draw()
         return GLib.SOURCE_CONTINUE
 
-    def _fit(self):
-        # a short pane keeps the picture but drops the text rather than pushing the controls away
-        h = self.area.get_height()
-        self.text.set_visible(h >= 90)
-        self._labels()
 
     def _fail(self, e):
         if not self._failed:
@@ -561,7 +606,7 @@ class PlanetScene(Gtk.Overlay):
             return
         try:
             inner = Gtk.Snapshot()
-            self.planet.draw(inner, w, h, self.t, self.motion, not style.is_dark())
+            self.planet.draw(inner, w, h, self.t, self.motion, not style.is_dark(), self._geometry(w, h))
             node = inner.to_node()
         except Exception as e:
             self._fail(e)

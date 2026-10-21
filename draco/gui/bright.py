@@ -123,12 +123,21 @@ class BrightDetails(Gtk.Box):
         self.app = window.app
         self.manager = window.manager
         self.item = None
+        # the live planet fills the pane behind the tabs and their content (it sits low and its sky
+        # reaches up behind the details, so it is never sliced); Options → Animation in the details pane
+        self.layers = Gtk.Overlay(vexpand=True)
+        self.append(self.layers)
+        self.scene = PlanetScene(self.app)
+        self.layers.set_child(self.scene)
+        self.content = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        self.layers.add_overlay(self.content)
+        self.layers.set_measure_overlay(self.content, True)
         tabs, self.tab_buttons = _tabs((("details", "Details"), ("limiter", "Speed limiter"),
                                         ("options", "Options on completion"), ("preview", "Preview")),
                                        "bw-ptabs", self._pick)
-        self.append(tabs)
+        self.content.append(tabs)
         self.stack = Gtk.Stack(transition_type=Gtk.StackTransitionType.CROSSFADE, vhomogeneous=False)
-        self.append(self.stack)
+        self.content.append(self.stack)
         self.empty = _lbl("Select a download to see its details.", css=["bw-key"], xalign=0.5)
         self.empty.set_vexpand(True)
         empty_page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)     # stays visible: a stack page must be
@@ -137,16 +146,21 @@ class BrightDetails(Gtk.Box):
         self.stack.add_named(self._details(), "details")
         self.extra = {}
         self.stack.set_visible_child_name("empty")
-        # live planet in the space below the tab's content (Options → Animation in the details pane)
-        self.scene = PlanetScene(self.app)
-        self.append(self.scene)
         self.scene.connect("notify::visible", lambda *_: self._fit_scene())
         self._fit_scene()
 
     def _fit_scene(self):
         on = self.scene.get_visible()
         self.stack.set_vexpand(not on)
+        self.content.set_valign(Gtk.Align.START if on else Gtk.Align.FILL)
         self.empty.set_visible(not on)          # the planet says "Select a download" itself
+        self._place_scene()
+
+    def _place_scene(self):
+        """Tell the planet where the tab's content ends, so it fits in full below (and behind) it."""
+        if self.scene.get_visible():
+            width = max(self.get_width(), self.content.measure(Gtk.Orientation.HORIZONTAL, -1)[0], 1)
+            self.scene.set_top(self.content.measure(Gtk.Orientation.VERTICAL, width)[1])
 
     def _details(self):
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12, margin_start=14, margin_end=14,
@@ -184,6 +198,7 @@ class BrightDetails(Gtk.Box):
         self.n_done, self.n_rate, self.n_eta = _lbl(css=["bw-small"]), _lbl(css=["bw-small"], xalign=0.5), \
             _lbl(css=["bw-small"], xalign=1)
         for w in (self.n_done, self.n_rate, self.n_eta):
+            w.set_ellipsize(Pango.EllipsizeMode.END)    # changing numbers must not change the pane's width
             nums.append(w)
         col.append(nums)
         row.append(col)
@@ -214,6 +229,8 @@ class BrightDetails(Gtk.Box):
                                           ("eta", "Time left"), ("resume", "Resume capability"))):
             grid.attach(_lbl(title, css=["bw-key"]), 0, r, 1, 1)
             v = _lbl(css=["bw-val"])
+            v.set_ellipsize(Pango.EllipsizeMode.END)
+            v.set_width_chars(12)
             grid.attach(v, 1, r, 1, 1)
             self.vals[key] = v
         info.append(grid)
@@ -221,7 +238,9 @@ class BrightDetails(Gtk.Box):
         top = Gtk.Box()
         top.append(_lbl("Speed", css=["bw-key"]))
         top.append(Gtk.Box(hexpand=True))
-        self.speed = _lbl(css=["bw-speed-val"])
+        self.speed = _lbl(css=["bw-speed-val"], xalign=1)
+        self.speed.set_ellipsize(Pango.EllipsizeMode.END)       # a changing speed must not move the pane
+        self.speed.set_width_chars(10)
         top.append(self.speed)
         sp.append(top)
         self.graph = Sparkline(height=110)
@@ -235,6 +254,7 @@ class BrightDetails(Gtk.Box):
             return
         if key == "details":
             self.stack.set_visible_child_name("details")
+            GLib.idle_add(lambda: (self._place_scene(), False)[1])
             return
         old = self.stack.get_child_by_name(key)
         if old:
@@ -245,6 +265,7 @@ class BrightDetails(Gtk.Box):
         page.set_margin_start(14)
         self.stack.add_named(page, key)
         self.stack.set_visible_child_name(key)
+        GLib.idle_add(lambda: (self._place_scene(), False)[1])
 
     def _toggle(self, *_):
         if not self.item:
@@ -268,8 +289,10 @@ class BrightDetails(Gtk.Box):
             self.item = None
             self.stack.set_visible_child_name("empty")
             self.scene.set_item(None)
+            self._place_scene()
             return
         self.scene.set_item(it)
+        self._place_scene()
         task = self.manager.task(it["id"])
         frac = util.fraction(it)
         size = it.get("size", -1)

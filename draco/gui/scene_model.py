@@ -96,7 +96,9 @@ class SceneMotion:
     def __init__(self):
         self.state = SceneState()
         self.arc = 0.0        # shown progress, never above the real fraction
-        self.flow = 0.0       # 0..1 strength of the data streams
+        self.flow = 0.0       # 0..1 how many data particles stream in (follows the average speed)
+        self.active = 0.0     # 0..1 a download is moving: steady motion and brightness, not the raw speed
+        self.avg = 0.0        # speed averaged over a few seconds (a jumpy speed must not shake the scene)
         self.speedy = 0.0     # 0..1 high-speed look (bright rings, speed lines)
         self.tight = 0.0      # 0..1 rings pulled in (finalizing)
         self.calm = 0.0       # 1 = completed (stable success glow)
@@ -110,10 +112,10 @@ class SceneMotion:
         if state.item_id != self.state.item_id:     # another download: jump, don't animate from the old one
             self.state = state
             self.peak = 1.0
+            self.avg = state.speed
             self.settle()
             self.flow = 0.0
             return
-        self.peak = max(self.peak * 0.995, state.speed, 1.0)
         self.state = state
 
     def targets(self):
@@ -121,8 +123,8 @@ class SceneMotion:
         stage = s.stage
         flow = 0.0
         if s.flowing:
-            flow = 0.45 + 0.55 * min(1.0, s.speed / self.peak) if s.speed else 0.8
-        return {"flow": flow,
+            flow = 0.5 + 0.5 * min(1.0, self.avg / self.peak) if s.speed else 0.8
+        return {"flow": flow, "active": 1.0 if s.flowing else 0.0,
                 "speedy": 1.0 if stage == "highspeed" else 0.0,
                 "tight": 1.0 if stage == "finalizing" else 0.0,
                 "calm": 1.0 if stage == "completed" else 0.0,
@@ -131,8 +133,11 @@ class SceneMotion:
                 "wake": 0.25 if stage in ("idle", "initializing") else 1.0}
 
     def update(self, dt):
+        self.avg = _approach(self.avg, self.state.speed, dt, 0.25)
+        self.peak = max(self.peak * (1 - 0.01 * dt), self.avg, 1.0)
         for k, v in self.targets().items():
-            setattr(self, k, _approach(getattr(self, k), v, dt, 2.0 if k != "flow" else 2.5))
+            slow = k == "flow" and self.state.flowing        # calm while running, quick to stop on pause
+            setattr(self, k, _approach(getattr(self, k), v, dt, 0.8 if slow else 2.0))
         target = PALETTE[self.state.stage]
         self.colors = tuple(tuple(_approach(a, b, dt, 1.8) for a, b in zip(cur, tgt))
                             for cur, tgt in zip(self.colors, target))

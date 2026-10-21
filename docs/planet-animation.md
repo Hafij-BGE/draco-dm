@@ -1,7 +1,9 @@
 # Live planet in the details pane
 
-The picture themes show a living planet in the free space of the right-hand details pane,
-below the Details / Speed limiter / Options on completion / Preview content. It follows the
+The picture themes show a living planet in the right-hand details pane. It is drawn behind the
+tabs and their content: the planet sits whole below the Details / Speed limiter / Options on
+completion / Preview content, and its sky reaches up to 70 px behind it (`OVERLAP`), so it is
+never sliced. It follows the
 selected download; with nothing selected it fills the pane and says "Select a download".
 
 ## Stages
@@ -32,8 +34,8 @@ The percentage and state are real GTK labels in the middle of the planet.
 * `draco/gui/planet_scene.py` draws with `Gtk.Snapshot` render nodes (GPU when available),
   not Cairo, so it needs no `python3-gi-cairo`.
 * 30 frames a second while a download moves, 15 otherwise; a frame takes about 2–3 ms of
-  Python. Drawing stops when the pane is hidden, the window is minimised, or less than 60 px
-  is free (no thin strip under the details); the labels go away under 90 px.
+  Python. Drawing stops when the pane is hidden, the window is minimised, or less than 40 px
+  is free below the content (`MIN_FREE`); the labels go away on a planet smaller than 40 px.
 * Pictures are loaded once on a worker thread: `draco/art/scene-planet.jpg` (96 turning frames,
   12 × 8 sheet) and `scene-nebula-a/b.png` (cloud layers that wrap left/right), about 0.8 MB.
   They are drawn from numbers by `tools/make_scene_art.py` (numpy + Pillow, build time only).
