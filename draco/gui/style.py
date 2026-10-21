@@ -818,8 +818,8 @@ def app_icon():
 
 def setup(theme="classic"):
     display = Gdk.Display.get_default()
-    theme = Gtk.IconTheme.get_for_display(display)
+    icons = Gtk.IconTheme.get_for_display(display)
     # Draco's own icons first, so an older installed app icon never shows up inside the app
-    theme.set_search_path([str(ICON_DIR)] + [p for p in theme.get_search_path() if p != str(ICON_DIR)])
+    icons.set_search_path([str(ICON_DIR)] + [p for p in icons.get_search_path() if p != str(ICON_DIR)])
     Gtk.Window.set_default_icon_name("io.github.draco.DracoDM")
     apply_theme(theme)

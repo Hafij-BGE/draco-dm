@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Draco Download Manager Integration",
   "short_name": "Draco",
-  "version": "1.8.2",
+  "version": "1.8.3",
   "description": "Sends downloads, videos and links to Draco Download Manager for fast multi-connection downloading.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA28uqV1ew75j5jKHVb6DSTCYk6BZ2+cP8bV+v073JupBD6X0fhW2wOCQfREtpUIG5/OpjROGNIE0InJ6+e+ZJffdmIs8VqdcUQkVGtLLEp3b2VLYaCx6btIXKM87oHjvEzUxyD+4MHQI+j24gfSPFGUxKMl50IneTXl8DXeoeZuiJUAMO5NGyHN6UdjmfpCEAC03AzT7wbrFUF8sZ5F9UkJo7Ey+c9TWi/PlZZ7+onqD6ZvLoaps/hfpbmSs2uUxZuTC2irSgKQEg76Wx2j7SI8Quq+gMgcbVZXeRf5cW54OVZHOIXPi74+ETJFB5+K26gree1la5+mSvy5LGjE7RfQIDAQAB",
   "permissions": [
