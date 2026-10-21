@@ -86,6 +86,8 @@ DEFAULT_SETTINGS = {
     "details_pane": True,
     "progress_window": "category",     # picture themes: "category" = by file type, "classic" = galaxy window
     "sidebar_collapsed": False,
+    "details_animation": True,         # picture themes: live planet in the details pane
+    "reduce_motion": False,            # still picture instead of the animation
     "progress_styles": {},             # category -> progress look (see style.PROGRESS_STYLES); missing = auto
     "ask_location_for_captures": True,   # files caught from the browser always show the File Info dialog
     "tray_icon": True,               # Draco icon in the top bar/system tray (show, quit)

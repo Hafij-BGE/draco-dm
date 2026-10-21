@@ -62,6 +62,10 @@ class PrefsDialog(Adw.PreferencesDialog):
                                      model=Gtk.StringList.new(["Category based (by file type)", "Classic"]))
         self.pw_style.set_selected(1 if s.get("progress_window", "category") == "classic" else 0)
         g.add(self.pw_style)
+        self._switch(g, "details_animation", "Live animation in the details pane")
+        self.rows["details_animation"].set_subtitle("Picture themes · a planet that follows the selected download")
+        self._switch(g, "reduce_motion", "Reduce motion")
+        self.rows["reduce_motion"].set_subtitle("Show a still picture instead of the animation")
         self._switch(g, "show_complete_dialog", "Show the download complete dialog")
         self._switch(g, "notify", "Desktop notification when a download finishes")
         self._switch(g, "sound", "Play a sound when a download finishes")
@@ -217,6 +221,8 @@ class PrefsDialog(Adw.PreferencesDialog):
         self.app.update_tray()
         self.app.manager.global_limiter.set_rate(s["speed_limit_kbps"] * 1024)
         self.app.manager.pump_queues()
+        if self.app.window and getattr(self.app.window, "bright_details", None):
+            self.app.window.bright_details.scene.reload_settings()
         if self.app.window:
             self.app.window.limit_toggle.set_active(bool(s["speed_limit_kbps"]))
             if s["speed_limit_kbps"]:

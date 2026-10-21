@@ -684,6 +684,12 @@ def current_palette():
     return MODERN.get(_current) or BRIGHT.get(_current)
 
 
+def is_dark():
+    """True when the theme in use is a dark one."""
+    t = MODERN.get(_current) or BRIGHT.get(_current) or THEMES.get(_current) or {}
+    return bool(t.get("dark"))
+
+
 def theme_groups():
     """Themes by category: [(title, [(key, name), …]), …] for the theme menus and Options."""
     def clean(name):

@@ -20,7 +20,9 @@ class Dialog(Adw.Window):
     def __init__(self, app, title, width=540, height=-1):
         super().__init__(title=title, default_width=width, default_height=height, application=app)
         self.app = app
-        parent = app.window if app.window and app.window.get_visible() else None
+        # Attach to the main window only while the user is in it: GNOME hides a dialog together with a
+        # minimised parent, so a download caught from the browser would wait unseen behind Draco.
+        parent = app.window if app.window and app.window.get_visible() and app.window.is_active() else None
         if parent:
             self.set_transient_for(parent)
         tv = Adw.ToolbarView()

@@ -16,6 +16,7 @@ from .. import APP_ID  # noqa: E402
 from ..manager import ACTIVE  # noqa: E402
 from . import bright_style, style, util  # noqa: E402
 from .util import fmt_eta, fmt_size, fmt_speed  # noqa: E402
+from .planet_scene import PlanetScene  # noqa: E402
 from .widgets import Ring, SegmentMap, Sparkline  # noqa: E402
 
 LIMITS = [64, 128, 256, 512, 1024, 2048, 4096, 8192, 16384]
@@ -126,14 +127,26 @@ class BrightDetails(Gtk.Box):
                                         ("options", "Options on completion"), ("preview", "Preview")),
                                        "bw-ptabs", self._pick)
         self.append(tabs)
-        self.stack = Gtk.Stack(vexpand=True, transition_type=Gtk.StackTransitionType.CROSSFADE)
+        self.stack = Gtk.Stack(transition_type=Gtk.StackTransitionType.CROSSFADE, vhomogeneous=False)
         self.append(self.stack)
         self.empty = _lbl("Select a download to see its details.", css=["bw-key"], xalign=0.5)
         self.empty.set_vexpand(True)
-        self.stack.add_named(self.empty, "empty")
+        empty_page = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)     # stays visible: a stack page must be
+        empty_page.append(self.empty)
+        self.stack.add_named(empty_page, "empty")
         self.stack.add_named(self._details(), "details")
         self.extra = {}
         self.stack.set_visible_child_name("empty")
+        # live planet in the space below the tab's content (Options → Animation in the details pane)
+        self.scene = PlanetScene(self.app)
+        self.append(self.scene)
+        self.scene.connect("notify::visible", lambda *_: self._fit_scene())
+        self._fit_scene()
+
+    def _fit_scene(self):
+        on = self.scene.get_visible()
+        self.stack.set_vexpand(not on)
+        self.empty.set_visible(not on)          # the planet says "Select a download" itself
 
     def _details(self):
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=12, margin_start=14, margin_end=14,
@@ -254,7 +267,9 @@ class BrightDetails(Gtk.Box):
         if not it or it["id"] not in self.manager.items:
             self.item = None
             self.stack.set_visible_child_name("empty")
+            self.scene.set_item(None)
             return
+        self.scene.set_item(it)
         task = self.manager.task(it["id"])
         frac = util.fraction(it)
         size = it.get("size", -1)

@@ -305,4 +305,15 @@ def css_for(key):
     vals = dict(BRIGHT[key])
     vals["bg_url"] = _url(vals["bg"])
     vals["kind_css"] = "".join(KIND_TEMPLATE.format(key=k, bg_url=_url(f"pw2-bg-{k}.png"), **v) for k, v in KINDS.items())
-    return TEMPLATE.format(**vals)
+    return TEMPLATE.format(**vals) + SCENE_CSS
+
+
+# Live planet in the details pane (planet_scene.py): dark text on the light themes' pale sky,
+# white text on the dark themes' night sky.
+SCENE_CSS = """
+.ps-scene { margin: 0 6px 6px 6px; }
+.ps-big { font-size: 26px; font-weight: 800; font-feature-settings: "tnum"; }
+.ps-small { font-size: 12px; font-weight: 700; }
+.ps-dark .ps-big, .ps-dark .ps-small { color: #ffffff; text-shadow: 0 1px 6px rgba(0, 0, 30, 0.85); }
+.ps-light .ps-big, .ps-light .ps-small { color: #ffffff; text-shadow: 0 1px 5px rgba(20, 20, 70, 0.75); }
+"""
