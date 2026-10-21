@@ -417,6 +417,19 @@ class DracoApp(Adw.Application):
 
     def show_progress(self, item):
         self._progress_seen.add(item["id"])
+        if style.is_bright(self.settings.get("theme")):
+            # picture themes: a window coloured by the file kind, or the Classic (galaxy) window
+            w = self.progress_windows.get(item["id"])
+            if not w:
+                if self.settings.get("progress_window", "category") == "classic":
+                    dark = style.BRIGHT[self.settings.get("theme")].get("dark")
+                    w = ProgressWindow(self, item, pstyle="galaxy" if dark else "galaxy-light")
+                else:
+                    from .bright import BrightProgressWindow
+                    w = BrightProgressWindow(self, item)
+                self.progress_windows[item["id"]] = w
+            w.present()
+            return
         if self.settings.get("progress_view", "app") == "app" and self.window and self.window.layout == "modern":
             self.show_main()
             self.window.open_detail(item, pin=True)

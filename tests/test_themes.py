@@ -24,15 +24,37 @@ class ThemeTest(unittest.TestCase):
             self.assertTrue((style.ART_DIR / p["art"]).exists(), p["art"])
             self.assertTrue((style.ART_DIR / p["bg"]).exists(), p["bg"])
 
-    def test_progress_look_follows_category_and_choice(self):
+    def test_picture_themes_use_their_own_progress_windows(self):
         self.assertIsNone(style.progress_style("classic", "Video"))
-        self.assertEqual(style.progress_style("galaxy-explorer", "Video"), "video")
-        self.assertEqual(style.progress_style("galaxy-explorer", "Programs"), "galaxy")
-        self.assertEqual(style.progress_style("aurora-light", "General"), "compressed")
-        chosen = {"Video": "documents", "General": "music", "Music": "auto"}
-        self.assertEqual(style.progress_style("galaxy-explorer", "Video", chosen), "documents")
-        self.assertEqual(style.progress_style("galaxy-explorer", None, chosen), "music")
-        self.assertEqual(style.progress_style("galaxy-explorer", "Music", chosen), "music")
+        for key in ("galaxy-explorer", "aurora-light", "solar-eclipse"):
+            self.assertTrue(style.is_bright(key))
+            self.assertIsNone(style.progress_style(key, "Video"))
+
+
+class BrightThemeTest(unittest.TestCase):
+    def test_light_picture_themes_build_and_have_art(self):
+        from draco.gui import bright_style
+        for key in bright_style.BRIGHT:
+            self.assertTrue(style.is_bright(key))
+            self.assertIn("bw-window", style.css_for(key))
+            self.assertTrue((bright_style.ART_DIR / bright_style.BRIGHT[key]["bg"]).exists(), key)
+        for kind in bright_style.KINDS:
+            self.assertTrue((bright_style.ART_DIR / f"pw2-ill-{kind}.png").exists(), kind)
+            self.assertTrue((bright_style.ART_DIR / f"pw2-bg-{kind}.jpg").exists(), kind)
+
+    def test_file_kind_picks_window_look(self):
+        from draco.gui.bright_style import file_icon, kind_of
+        self.assertEqual(kind_of({"filename": "a.zip"}), "archive")
+        self.assertEqual(kind_of({"filename": "talk.MP4"}), "video")
+        self.assertEqual(kind_of({"filename": "x.flac"}), "music")
+        self.assertEqual(kind_of({"filename": "paper.pdf"}), "document")
+        self.assertEqual(kind_of({"filename": "setup.exe"}), "program")
+        self.assertEqual(kind_of({"filename": "ubuntu.iso"}), "disc")
+        self.assertEqual(kind_of({"filename": "photo.jpg"}), "image")
+        self.assertEqual(kind_of({"filename": "blob.bin"}), "unknown")
+        self.assertEqual(kind_of({"filename": "", "url": "https://x/live.m3u8", "kind": "hls"}), "live")
+        self.assertEqual(file_icon("paper.pdf"), "draco-f-pdf")
+        self.assertEqual(file_icon("a.rar"), "draco-f-archive")
 
 
 if __name__ == "__main__":

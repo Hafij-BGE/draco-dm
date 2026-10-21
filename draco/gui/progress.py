@@ -39,6 +39,12 @@ class ProgressView(Gtk.Box):
             self._build_browser()
             self.update()
             return
+        if design == "galaxy":
+            self._build_galaxy()
+            if app.settings.get("progress_details", True):
+                self._toggle_details()
+            self.update()
+            return
 
         nb = Gtk.Notebook()
         nb.add_css_class("draco-tabs")
@@ -84,6 +90,212 @@ class ProgressView(Gtk.Box):
         if embedded or app.settings.get("progress_details", False):
             self._toggle_details()
         self.update()
+
+    # -- Classic (galaxy) standalone window -------------------------------------
+    @staticmethod
+    def _icon_label(icon, text, size=16):
+        box = Gtk.Box(spacing=10, halign=Gtk.Align.CENTER)
+        img = Gtk.Image(icon_name=icon, pixel_size=size)
+        lb = Gtk.Label(label=text)
+        box.append(img)
+        box.append(lb)
+        box.img, box.lbl = img, lb
+        return box
+
+    GX_COLORS = ["#3b82f6", "#22d3ee", "#8b5cf6", "#ec4899", "#fb923c", "#34d399", "#a855f7", "#0ea5e9"]
+
+    def _fill_preview(self):
+        from .bright import _preview_box
+        child = self._preview_page.get_first_child()
+        if child:
+            self._preview_page.remove(child)
+        box = _preview_box(self.item)
+        box.set_margin_start(14)
+        self._preview_page.append(box)
+
+    def _build_galaxy(self):
+        """The Classic progress window: icon tabs, status card with the picture behind the numbers,
+        Hide details / Pause / Cancel, and a striped connection list with bars. The light version
+        adds a Preview tab, a copy button, a connections selector and coloured per-connection bars."""
+        from gi.repository import Pango
+        self.light = self.pstyle == "galaxy-light"
+        nb = Gtk.Notebook()
+        nb.add_css_class("gx-tabs")
+        nb.append_page(self._galaxy_status(), self._icon_label("draco-down-symbolic", "Download status", 18))
+        nb.append_page(self._limiter_page(), self._icon_label("draco-speed-symbolic", "Speed Limiter", 18))
+        nb.append_page(self._options_page(), self._icon_label("emblem-system-symbolic", "Options on completion", 18))
+        if self.light:
+            self._preview_page = Gtk.Box()
+            nb.append_page(self._preview_page, self._icon_label("media-playback-start-symbolic", "Preview", 18))
+            nb.connect("switch-page", lambda nb, page, n: n == 3 and self._fill_preview())
+        self.append(nb)
+
+        btns = Gtk.Box(spacing=12, margin_top=4)
+        self.details_btn = Gtk.Button(width_request=200)
+        self.details_btn.add_css_class("gx-btn")
+        self._details_child = self._icon_label("pan-down-symbolic", "Show details")
+        self.details_btn.set_child(self._details_child)
+        self.details_btn.connect("clicked", self._toggle_details)
+        btns.append(self.details_btn)
+        btns.append(Gtk.Box(hexpand=True))
+        self.pause_btn = Gtk.Button(width_request=150)
+        self.pause_btn.add_css_class("gx-pause")
+        self._pause_child = self._icon_label("media-playback-pause-symbolic", "Pause", 18)
+        self.pause_btn.set_child(self._pause_child)
+        self.pause_btn.connect("clicked", self._toggle_pause)
+        btns.append(self.pause_btn)
+        cancel = Gtk.Button(width_request=150)
+        cancel.add_css_class("gx-cancel" if self.light else "gx-btn")
+        cc = self._icon_label("draco-x-symbolic", "Cancel", 18)
+        cc.img.add_css_class("gx-red")
+        cancel.set_child(cc)
+        cancel.connect("clicked", self._cancel)
+        btns.append(cancel)
+        self.append(btns)
+
+        self.details = Gtk.Revealer(transition_type=Gtk.RevealerTransitionType.SLIDE_DOWN)
+        dbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10, margin_top=4)
+        dbox.add_css_class("gx-card")
+        dbox.add_css_class("gx-pad")
+        top = Gtk.Box(spacing=8)
+        title = util.label("Start positions and download progress by connections", css=["gx-dtitle"])
+        title.set_hexpand(True)
+        top.append(title)
+        if self.light:
+            counts = [1, 2, 4, 6, 8, 12, 16, 24, 32]
+            self.conn_drop = Gtk.DropDown.new_from_strings([f"{n} Connections" for n in counts])
+            self.conn_drop.add_css_class("gx-drop")
+            cur = int(self.item.get("connections") or self.app.settings["connections"])
+            self.conn_drop.set_selected(min(range(len(counts)), key=lambda i: abs(counts[i] - cur)))
+            self.conn_drop.connect("notify::selected",
+                                   lambda d, _p: self.item.__setitem__("connections", counts[d.get_selected()]))
+            self.conn_drop.set_tooltip_text("Connections used when this download (re)starts")
+            top.append(self.conn_drop)
+        dbox.append(top)
+        self.map = SegmentMap(self.item, self.pstyle)
+        self.map.set_size_request(-1, 30)
+        self.map.add_css_class("gx-seg")
+        dbox.append(self.map)
+        table = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        table.add_css_class("gx-table")
+        head = Gtk.Box()
+        head.add_css_class("gx-head")
+        cols = (("N.", 70, 0.5), ("Downloaded", 160, 0.5), ("Info", -1, 0))
+        if self.light:
+            cols += (("Progress", 226, 0), ("Speed", 120, 0))
+        for text, w, xa in cols:
+            lb = util.label(text, xalign=xa)
+            lb.add_css_class("gx-cell")
+            if w > 0:
+                lb.set_size_request(w, -1)
+            else:
+                lb.set_hexpand(True)
+            head.append(lb)
+        table.append(head)
+        self.gx_rows_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
+        table.append(self.gx_rows_box)
+        self.gx_rows = []
+        dbox.append(Gtk.ScrolledWindow(child=table, min_content_height=150, max_content_height=300,
+                                       propagate_natural_height=True))
+        self.details.set_child(dbox)
+        self.append(self.details)
+        self.conn_rows = []
+
+    def _galaxy_status(self):
+        from gi.repository import Pango
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6, margin_top=10)
+        box.add_css_class("gx-card")
+        box.add_css_class("gx-art")
+        urlrow = Gtk.Box(spacing=14)
+        urlrow.add_css_class("gx-url")
+        urlrow.append(Gtk.Image(icon_name="draco-chain-symbolic", pixel_size=20))
+        self.url_lbl = util.label(self.item["url"])
+        self.url_lbl.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
+        self.url_lbl.set_hexpand(True)
+        urlrow.append(self.url_lbl)
+        if self.pstyle == "galaxy-light":
+            copy = Gtk.Button(icon_name="edit-copy-symbolic", tooltip_text="Copy address")
+            copy.add_css_class("flat")
+            copy.connect("clicked", lambda *_: self.get_clipboard().set(self.item["url"]))
+            urlrow.append(copy)
+        box.append(urlrow)
+        inner = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6, margin_start=22, margin_end=22,
+                        margin_top=8, margin_bottom=16)
+        self.status_lbl = util.label("", css=["gx-state"])
+        inner.append(self.status_lbl)
+        grid = Gtk.Grid(column_spacing=0, row_spacing=4)
+        self.fields = {}
+        for row, (key, title) in enumerate([("size", "File size"), ("done", "Downloaded"),
+                                            ("rate", "Transfer rate"), ("eta", "Time left"),
+                                            ("resume", "Resume capability")]):
+            k = util.label(title, css=["gx-key"], ellipsize=False)
+            k.set_size_request(250, -1)
+            grid.attach(k, 0, row, 1, 1)
+            v = util.label(css=["gx-val"] + (["yes"] if key == "resume" else []), ellipsize=False)
+            grid.attach(v, 1, row, 1, 1)
+            self.fields[key] = v
+        inner.append(grid)
+        bar_row = Gtk.Box(spacing=14, margin_top=14)
+        self.bar = Gtk.ProgressBar(hexpand=True, valign=Gtk.Align.CENTER)
+        self.bar.add_css_class("gx-bar")
+        bar_row.append(self.bar)
+        self.pct_lbl = util.label("", css=["gx-pct"], ellipsize=False)
+        bar_row.append(self.pct_lbl)
+        inner.append(bar_row)
+        box.append(inner)
+        self.graph = None
+        return box
+
+    def _galaxy_conns(self, task):
+        segs = sorted(self.item.get("segments") or [], key=lambda s: s["s"])
+        rows = []
+        for sg in segs:
+            total = (sg["e"] - sg["s"]) if sg["e"] >= 0 else -1
+            got = sg["p"] - sg["s"]
+            info = "Finished" if total >= 0 and got >= total else ("Receiving data…" if task else "Paused")
+            prev = self._last.get(sg["s"])
+            now = time.monotonic()
+            speed = (got - prev[0]) / max(1e-3, now - prev[1]) if prev and task and info != "Finished" else 0
+            self._last[sg["s"]] = (got, now)
+            rows.append((fmt_size(got), info, got / total if total > 0 else 0.0, fmt_speed(speed) if speed > 0 else ""))
+        while len(self.gx_rows) < len(rows):
+            n = len(self.gx_rows) + 1
+            r = Gtk.Box()
+            r.add_css_class("gx-row")
+            if n % 2 == 0:
+                r.add_css_class("odd")
+            cells = [util.label(str(n), xalign=0.5), util.label(xalign=0.5), util.label()]
+            cells[0].set_size_request(70, -1)
+            cells[1].set_size_request(160, -1)
+            cells[2].set_hexpand(True)
+            for c in cells:
+                c.add_css_class("gx-cell")
+                r.append(c)
+            if self.light:
+                wrap = Gtk.Box(width_request=226)
+                bar = Gtk.ProgressBar(valign=Gtk.Align.CENTER, hexpand=True, margin_start=12, margin_end=20)
+                bar.add_css_class("gx-thin")
+                wrap.append(bar)
+                r.append(wrap)
+                sp = util.label()
+                sp.add_css_class("gx-cell")
+                sp.set_size_request(120, -1)
+                r.append(sp)
+            else:
+                bar = Gtk.ProgressBar(valign=Gtk.Align.CENTER, width_request=200, margin_end=26)
+                bar.add_css_class("gx-thin")
+                r.append(bar)
+                sp = None
+            self.gx_rows_box.append(r)
+            self.gx_rows.append((r, cells, bar, sp))
+        for i, (r, cells, bar, sp) in enumerate(self.gx_rows):
+            r.set_visible(i < len(rows))
+            if i < len(rows):
+                cells[1].set_text(rows[i][0])
+                cells[2].set_text(rows[i][1])
+                bar.set_fraction(rows[i][2])
+                if sp is not None:
+                    sp.set_text(rows[i][3])
 
     # -- Galaxy Explorer details-pane layout -----------------------------------
     def _build_browser(self):
@@ -221,7 +433,10 @@ class ProgressView(Gtk.Box):
             self.fields[key] = v
         mid.append(grid)
         self.graph = None
-        if self.pstyle:
+        if self.pstyle and self.pstyle.startswith("galaxy"):
+            box.add_css_class("pw-art")                  # galaxy drawn into the card background
+            mid.set_size_request(-1, 150)
+        elif self.pstyle:
             art = style.ART_DIR / style.PROGRESS_STYLES[self.pstyle]["art"]
             if art.exists():
                 pic = Gtk.Picture.new_for_filename(str(art))
@@ -281,7 +496,11 @@ class ProgressView(Gtk.Box):
     def _toggle_details(self, *_):
         show = not self.details.get_reveal_child()
         self.details.set_reveal_child(show)
-        self.details_btn.set_label("<< Hide details" if show else "Show details >>")
+        if self.design == "galaxy":
+            self._details_child.img.set_from_icon_name("pan-up-symbolic" if show else "pan-down-symbolic")
+            self._details_child.lbl.set_text("Hide details" if show else "Show details")
+        else:
+            self.details_btn.set_label("<< Hide details" if show else "Show details >>")
         if not self.embedded:
             self.app.settings["progress_details"] = show
 
@@ -347,7 +566,12 @@ class ProgressView(Gtk.Box):
             (self.bar.add_css_class if on else self.bar.remove_css_class)(c)
         if self.graph is not None:
             self.graph.push(it.get("speed", 0) if st == "downloading" else 0)
-        self.pause_btn.set_label("Pause" if task else "Resume")
+        if self.design == "galaxy":
+            self._pause_child.img.set_from_icon_name("media-playback-pause-symbolic" if task
+                                                     else "media-playback-start-symbolic")
+            self._pause_child.lbl.set_text("Pause" if task else "Resume")
+        else:
+            self.pause_btn.set_label("Pause" if task else "Resume")
         self.pause_btn.set_sensitive(st != "complete")
         if self.embedded and self.design != "browser":
             has_conns = bool(it.get("segments") or it.get("seg_total"))
@@ -355,7 +579,10 @@ class ProgressView(Gtk.Box):
             self.details_btn.set_visible(has_conns)
         if self.details.get_reveal_child():
             self.map.queue_draw()
-            self._update_connections(task)
+            if self.design == "galaxy":
+                self._galaxy_conns(task)
+            else:
+                self._update_connections(task)
         return not (st == "complete" and not self.embedded)
 
     def title(self):
@@ -406,26 +633,42 @@ class ProgressView(Gtk.Box):
 
 
 class ProgressWindow(Adw.Window):
-    def __init__(self, app, item):
-        pstyle = style.progress_style(app.settings.get("theme"), item.get("category"),
-                                      app.settings.get("progress_styles"))
+    def __init__(self, app, item, pstyle=None):
+        pstyle = pstyle or style.progress_style(app.settings.get("theme"), item.get("category"),
+                                                app.settings.get("progress_styles"))
         super().__init__(title=item.get("filename") or "download", default_width=640 if pstyle else 580,
                          resizable=False, application=app)
         self.app = app
         self.item = item
         tv = Adw.ToolbarView()
         header = Adw.HeaderBar()
-        if pstyle:
+        self.galaxy = bool(pstyle and pstyle.startswith("galaxy"))
+        if self.galaxy:
+            self.add_css_class(f"pw-{pstyle}")
+            self.add_css_class("gx-window")
+            self.set_default_size(740, -1)
+            handle = Gtk.WindowHandle()
+            head = Gtk.Box(spacing=18, margin_start=22, margin_end=14, margin_top=14, margin_bottom=6)
+            head.append(Gtk.Image(gicon=style.app_icon(), pixel_size=58))
+            self.pct_title = util.label("", css=["gx-title-pct"], ellipsize=False)
+            head.append(self.pct_title)
+            self.title_lbl = util.label("", css=["gx-title"])
+            self.title_lbl.set_hexpand(True)
+            head.append(self.title_lbl)
+            head.append(Gtk.WindowControls(side=Gtk.PackType.END, valign=Gtk.Align.START))
+            handle.set_child(head)
+            header = handle
+        elif pstyle:
             self.add_css_class(f"pw-{pstyle}")
             head = Gtk.Box(spacing=10)
-            head.append(Gtk.Image(icon_name="io.github.draco.DracoDM", pixel_size=30))
+            head.append(Gtk.Image(gicon=style.app_icon(), pixel_size=30))
             self.title_lbl = util.label("", css=["pw-title"])
             head.append(self.title_lbl)
             header.set_title_widget(head)
         else:
             self.title_lbl = None
         tv.add_top_bar(header)
-        self.view = ProgressView(app, item, pstyle, on_close=self.close)
+        self.view = ProgressView(app, item, pstyle, on_close=self.close, design="galaxy" if self.galaxy else "")
         self.view.set_margin_start(12)
         self.view.set_margin_end(12)
         self.view.set_margin_top(4)
@@ -440,7 +683,11 @@ class ProgressWindow(Adw.Window):
         alive = self.view.update()
         title = self.view.title()
         self.set_title(title)
-        if self.title_lbl:
+        if self.galaxy:
+            it = self.item
+            self.pct_title.set_text(f"{util.fraction(it) * 100:.0f}%")
+            self.title_lbl.set_text(it.get("filename") or "")
+        elif self.title_lbl:
             self.title_lbl.set_text(title)
         if not alive:
             self.close()

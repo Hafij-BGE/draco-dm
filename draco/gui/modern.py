@@ -1,6 +1,5 @@
-"""Dashboard layout of the main window, used by the dashboard themes (Galaxy Explorer, Cosmic
-Minimal, Nebula Glow, Aurora Light): stats header, rounded cards, a progress column and a details
-pane that shows the full progress of open downloads as tabs."""
+"""Dashboard layout of the main window (formerly used by the dashboard themes): stats header,
+rounded cards, a progress column and a details pane with the full progress of open downloads."""
 
 import gi
 
@@ -32,6 +31,8 @@ class ModernLayout:
 
     # ------------------------------------------------------------- build
     def _build_modern(self):
+        if style.is_bright(self.app.settings.get("theme")):
+            return self._build_bright()
         # Galaxy Explorer uses the "galaxy browser" arrangement: tiles in the header, a details pane
         # with the selected download's full progress, no stats card. Other dashboard themes keep
         # the stats header.
@@ -92,7 +93,7 @@ class ModernLayout:
         header.add_css_class("dm-header")
         handle.set_child(header)
         brand = Gtk.Box(spacing=12)
-        brand.append(Gtk.Image(icon_name=APP_ID, pixel_size=54))
+        brand.append(Gtk.Image(gicon=style.app_icon(), pixel_size=54))
         words = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, valign=Gtk.Align.CENTER)
         words.append(util.label("Draco Download Manager", css=["dm-brand-line"], ellipsize=False))
         words.append(util.label("Fast  •  Reliable  •  In Your Control", css=["dm-brand-tag"], ellipsize=False))
@@ -215,7 +216,7 @@ class ModernLayout:
         header.add_css_class("dm-header")
         handle.set_child(header)
         brand = Gtk.Box(spacing=12, width_request=300, valign=Gtk.Align.START, margin_top=40)
-        brand.append(Gtk.Image(icon_name=APP_ID, pixel_size=70))
+        brand.append(Gtk.Image(gicon=style.app_icon(), pixel_size=70))
         words = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, valign=Gtk.Align.CENTER)
         words.append(util.label("Draco", css=["dm-brand-title"], ellipsize=False))
         words.append(util.label("Download Manager", css=["dm-brand-sub"], ellipsize=False))
@@ -279,7 +280,7 @@ class ModernLayout:
         handle.set_child(header)
 
         brand = Gtk.Box(spacing=10, valign=Gtk.Align.START, width_request=262)
-        brand.append(Gtk.Image(icon_name=APP_ID, pixel_size=64))
+        brand.append(Gtk.Image(gicon=style.app_icon(), pixel_size=64))
         words = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, valign=Gtk.Align.CENTER)
         words.append(util.label("Draco", css=["dm-brand-title"], ellipsize=False))
         words.append(util.label("Download Manager", css=["dm-brand-sub"], ellipsize=False))
@@ -753,6 +754,8 @@ class ModernLayout:
         """Show a download's full progress in the details pane (a pinned tab stays open)."""
         if self.layout != "modern":
             return False
+        if getattr(self, "bright", False):
+            return self._bright_open(item, pin)
         pin = pin and self.browser          # without tabs the pane simply shows one download
         for i, entry in enumerate(self.detail_views):
             if entry[0].item is item:
@@ -819,6 +822,8 @@ class ModernLayout:
 
     # ------------------------------------------------------------- refresh
     def _modern_tick(self):
+        if getattr(self, "bright", False):
+            return self._bright_tick()
         items = list(self.manager.items.values())
         active = [i for i in items if i["status"] in ACTIVE]
         done = [i for i in items if i["status"] == "complete"]

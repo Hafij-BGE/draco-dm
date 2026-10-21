@@ -19,7 +19,7 @@ Multi-connection downloads, browser capture, YouTube and streaming video. No acc
 [Video & YouTube](#video-youtube-and-subtitles) ·
 [Build from source](#build-from-source)
 
-<img src="docs/screenshots/dashboard-galaxy-explorer.jpg" alt="Draco with the Galaxy Explorer dashboard theme" width="900">
+<img src="docs/screenshots/dashboard-galaxy-explorer.jpg" alt="Draco with the Galaxy Explorer theme" width="900">
 
 </div>
 
@@ -30,7 +30,7 @@ Multi-connection downloads, browser capture, YouTube and streaming video. No acc
 - 🌐 **Browser capture** for Chrome, Edge, Brave, Opera, Vivaldi and Firefox, including snap and Flatpak browsers. Cookies and referrer are passed along, so logged-in downloads work.
 - 🎬 **Video downloads** from YouTube and 1000+ sites, plus HLS/DASH streams, with the size of every quality shown before you choose.
 - 🗂️ **Queues, scheduler, categories, speed limiter**, site grabber, batch downloads and a clipboard watcher.
-- 🎨 **18 themes**: 4 dashboard themes (*Galaxy Explorer*, *Cosmic Minimal*, *Nebula Glow*, *Aurora Light*) with a stats header, speed graph and in-app progress pane, plus 14 classic themes.
+- 🎨 **32 themes**: 18 picture themes (11 light, 7 dark) with an illustrated header and a progress window coloured by file type, plus 14 classic themes.
 - 🪶 **Lightweight and private.** Python 3 + GTK 4/libadwaita, standard library only. No telemetry, no ads.
 
 ## Install
@@ -118,36 +118,35 @@ After an update, Draco refreshes its copy of the extension. Click **Reload** on 
 
 Switch instantly under **View → Theme** or with the palette button.
 
-**Dashboard themes:** *Galaxy Explorer*, *Cosmic Minimal*, *Nebula Glow* and *Aurora Light* change the whole window:
-- toolbar tiles with a star field (each Galaxy Explorer button also has its own planet; Aurora Light has soft pastel buttons) and a modern colour icon set
-- a compact sidebar with counts that collapses to icons only
-- a progress bar in every row, coloured by file type, and All / Downloading / Completed tabs
-- a details pane with the selected download's full progress; close it for a wide stats strip and the full toolbar
-- **Galaxy Explorer** follows its own concept layout (open download tabs in the pane) and adds the **Cosmic Dashboard**: active downloads orbiting the Draco star, queues, categories, speed trend, real-time alerts and telemetry (planet button in the header)
+**Picture themes:**
+- **Light:** Cosmic Sky, Starlight Forest, Aurora, Sunrise, Ocean, Minimal, Lavender, Sandstone, Monochrome, Sunset Nebula and Aurora Light.
+- **Dark:** Galaxy Explorer, Aurora Glow, Galaxy Explorer (Dark), Forest Night, Midnight Ocean, Royal Purple and Solar Eclipse.
+
+Each one has an illustrated header that fades into the window, white or dark tool tiles, a coloured sidebar, a download list with a details pane (progress ring, speed graph) and a status bar with the speed limiter and drive space.
 
 <div align="center">
-<img src="docs/screenshots/dashboard-aurora-light.jpg" alt="Draco with the Aurora Light dashboard theme" width="760">
+<img src="docs/screenshots/themes.jpg" alt="The picture themes" width="900">
 </div>
 
-In these themes, each file type gets its own progress look: *Galaxy Explorer*, *Starlight Forest* (documents), *Aurora Music*, *Cinematic Horizon* (video) and *Nebula Archive* (compressed). Choose the look per category in **Options → Save To → Categories → Progress look**.
-
-To see progress inside Draco or in separate windows, use **Options → General → Show download progress**.
+In these themes every download gets its own **progress window coloured by file type**: ZIP, video, music, documents, programs, disc images, images, live streams and others. It has Status, Connections, Log and Preview tabs.
 
 <div align="center">
-<img src="docs/screenshots/cosmic-dashboard.jpg" alt="Cosmic Dashboard in Galaxy Explorer" width="900">
+<img src="docs/screenshots/progress-windows.jpg" alt="Progress windows by file type" width="900">
 </div>
+
+Prefer one look for all downloads? Choose **Options → General → Progress window style → Classic** for the galaxy window: dark in dark themes, light in light themes.
 
 <div align="center">
-<img src="docs/screenshots/progress-looks.jpg" alt="Progress windows: Galaxy Explorer, Starlight Forest, Aurora Music, Cinematic Horizon, Nebula Archive" width="900">
+<img src="docs/screenshots/progress-classic.jpg" alt="Classic progress window, dark and light" width="900">
 </div>
 
-**Classic themes:** *Follow desktop*, *Draco Classic*, *Retro Gray*, *Soft Light*, *Galaxy*, *Dark*, *Midnight Blue*, *Nightshade*, *Arctic Frost*, *Sand Light*, *Deep Teal*, *Forest*, *Sunset* and *High Contrast* keep the menu-bar layout. They come with matching icons; **View → Icon Style** overrides them.
+**Classic themes:** Follow desktop, Draco Classic, Retro Gray, Soft Light, Galaxy, Dark, Midnight Blue, Nightshade, Arctic Frost, Sand Light, Deep Teal, Forest, Sunset and High Contrast. They keep the menu-bar layout, and **View → Icon Style** changes their icons.
 
 <div align="center">
 <img src="docs/screenshots/main-classic.png" alt="Draco Classic theme" width="760">
 </div>
 
-To add your own theme, copy an entry in `THEMES` (classic) or `MODERN` (dashboard) in `draco/gui/style.py`. The dashboard pictures are made by `tools/make_theme_art.py`.
+To add your own theme, copy an entry in `BRIGHT` in `draco/gui/bright_style.py` (picture themes) or `THEMES` in `draco/gui/style.py` (classic themes). The theme pictures are made by `tools/make_theme_art.py`.
 
 ## Command line
 

@@ -9,6 +9,7 @@ from gi.repository import Adw, Gdk, Gio, GLib, GObject, Gtk  # noqa: E402
 from .. import APP_NAME  # noqa: E402
 from ..manager import ACTIVE  # noqa: E402
 from . import style, util  # noqa: E402
+from .bright import BrightLayout  # noqa: E402
 from .modern import ModernLayout  # noqa: E402
 from .util import fmt_eta, fmt_size, fmt_speed, fmt_time  # noqa: E402
 
@@ -59,7 +60,7 @@ def _cmp(a, b):
     return Gtk.Ordering.SMALLER if a < b else (Gtk.Ordering.LARGER if a > b else Gtk.Ordering.EQUAL)
 
 
-class MainWindow(ModernLayout, Adw.ApplicationWindow):
+class MainWindow(BrightLayout, ModernLayout, Adw.ApplicationWindow):
     def __init__(self, app):
         super().__init__(application=app, title=APP_NAME)
         self.app = app
@@ -101,9 +102,17 @@ class MainWindow(ModernLayout, Adw.ApplicationWindow):
         self.layout = want
         self._layout_theme = theme
         self.browser = False
+        self.bright = False
         self.detail_views = []
         self.cosmic = None
-        if want == "modern":
+        self.remove_css_class("bw-window")
+        if want == "modern" and style.is_bright(theme):
+            self.remove_css_class("dm-window")
+            self.add_css_class("bw-window")
+            content = self._build_modern()
+            if self.get_default_size()[0] < 1400:
+                self.set_default_size(1460, 860)
+        elif want == "modern":
             self.add_css_class("dm-window")
             content = self._build_modern()
             if self.get_default_size()[0] < 1500:

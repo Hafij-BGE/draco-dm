@@ -16,6 +16,8 @@ gi.require_version("Adw", "1")
 from gi.repository import Adw, Gdk, Gtk  # noqa: E402
 
 ICON_DIR = Path(__file__).resolve().parent.parent / "icons"
+from . import bright_style  # noqa: E402
+from .bright_style import BRIGHT  # noqa: E402
 
 
 def _light(**kw):
@@ -179,19 +181,6 @@ def _modern(**kw):
 
 MODERN = {
     "galaxy-explorer": {"name": "Galaxy Explorer (dashboard)", **_modern()},
-    "cosmic-minimal": {"name": "Cosmic Minimal (dashboard)", **_modern(
-        bg="bg-cosmic-minimal.jpg", base="#060b1e", base2="#08102a", panel="rgba(9,15,38,0.92)",
-        panel_solid="#0a1230", border="rgba(80,120,220,0.25)", a1="#2f6bff", a2="#2f9bff",
-        tile="rgba(16,26,60,0.85)", tile_hover="rgba(36,60,130,0.9)", tile_border="rgba(80,120,220,0.3)",
-        glow="rgba(47,107,255,0.35)", tile_hi="rgba(40,72,160,0.6)")},
-    "nebula-glow": {"name": "Nebula Glow (dashboard)", **_modern(
-        bg="bg-nebula-glow.jpg", base="#180626", base2="#260a3a", panel="rgba(32,10,54,0.74)",
-        panel_solid="#260a40", border="rgba(255,90,220,0.30)", fg="#fbeaff", dim="#c9a3dc",
-        a1="#ff4fd8", a2="#8a5cff", accent="#d75cff", tile="rgba(60,16,90,0.70)",
-        tile_hover="rgba(120,30,150,0.85)", tile_border="rgba(255,110,230,0.35)",
-        sel="rgba(220,80,255,0.32)", hover="rgba(255,90,220,0.12)", line="rgba(255,120,230,0.08)",
-        p1="#ff4fd8", p2="#8a5cff", glow="rgba(255,79,216,0.45)", active="#ff8ae8", pw="music",
-        tile_hi="rgba(150,40,170,0.55)")},
     "aurora-light": {"name": "Aurora Light (dashboard)", **_modern(
         dark=False, bg="bg-aurora-light.jpg", base="#eceeff", base2="#f6f4ff",
         panel="rgba(255,255,255,0.76)", panel_solid="#f8f8ff", border="rgba(140,140,220,0.35)",
@@ -204,8 +193,18 @@ MODERN = {
         stars="tile-stars-dark.png", card_stars=None)},
 }
 
+# The dashboard themes now use the picture-theme layout (bright_style); their old definitions stay
+# above only as the source of their colours for older code paths.
+for _k in list(MODERN):
+    if _k in BRIGHT:
+        del MODERN[_k]
+
 # Progress-window looks per download category in the dashboard themes.
 PROGRESS_STYLES = {
+    "galaxy-light": dict(dark=False, art="ill-galaxy.png", bg="pw-galaxy-light-bg.jpg", base="#f4f7fe",
+                         panel="rgba(255,255,255,0.86)", border="rgba(150,170,230,0.45)", fg="#16213e",
+                         dim="#5b6787", a1="#6b4dff", a2="#1f9bff", tile="rgba(255,255,255,0.92)",
+                         seg_bg="#dfe6f7", seg_done="#3b82f6", seg_head="#ff8a1f", name="Galaxy Explorer (light)"),
     "galaxy": dict(dark=True, art="ill-galaxy.png", bg="bg-galaxy-explorer.jpg", base="#070b26",
                    panel="rgba(14,20,60,0.82)", border="rgba(90,140,255,0.40)", fg="#e8ecff", dim="#9aa4d6",
                    a1="#6b4dff", a2="#1fb8ff", tile="rgba(22,30,80,0.80)", seg_bg="#13204a",
@@ -231,13 +230,18 @@ CATEGORY_PROGRESS = {"Documents": "documents", "Music": "music", "Video": "video
 
 
 def is_modern(key):
-    return key in MODERN
+    return key in MODERN or key in BRIGHT
+
+
+def is_bright(key):
+    """Sky Light / Rose Sunset: light picture themes with their own layout and progress windows."""
+    return key in BRIGHT
 
 
 def progress_style(theme, category, chosen=None):
     """Which progress look a download gets (None = the plain classic window). `chosen` is the
     user's choice per category from Options (missing or "auto" = the built-in pick)."""
-    if not is_modern(theme):
+    if not is_modern(theme) or is_bright(theme):
         return None
     pick = (chosen or {}).get(category or "General", "auto")
     if pick in PROGRESS_STYLES:
@@ -257,11 +261,14 @@ ICON_STYLES = [("auto", "Match theme"), ("modern", "Modern"), ("color", "Colourf
 THEME_ICONS = {"system": "mono", "classic": "color", "retro": "color", "soft-light": "flat", "galaxy": "accent",
                "dark": "mono", "midnight": "accent", "nightshade": "accent", "arctic": "accent",
                "sand": "flat", "deep-teal": "accent", "forest": "flat", "sunset": "flat",
-               "high-contrast": "mono", "galaxy-explorer": "modern", "cosmic-minimal": "modern",
-               "nebula-glow": "modern", "aurora-light": "modern"}
+               "high-contrast": "mono", "galaxy-explorer": "modern", "aurora-light": "modern",
+}
+THEME_ICONS.update({k: "modern" for k in BRIGHT})
 def current_theme(key):
     """A saved theme name, or Draco Classic if it no longer exists (themes were renamed in 1.4.4)."""
-    return key if key in THEMES or key in MODERN else "classic"
+    key = {"sky-light": "cosmic-sky", "rose-sunset": "sunset-nebula", "green-meadow": "starlight-forest",
+           "cosmic-minimal": "galaxy-explorer", "nebula-glow": "galaxy-explorer"}.get(key, key)
+    return key if key in THEMES or key in MODERN or key in BRIGHT else "classic"
 # Line icons for the monochrome/accent styles (GTK recolours them to match the theme).
 SYMBOLIC = {
     "add-url": "list-add-symbolic", "resume": "media-playback-start-symbolic",
@@ -567,6 +574,17 @@ button.suggested-action {{ background: linear-gradient(135deg, {a1}, {a2}); colo
 """
 
 PROGRESS_TEMPLATE = """
+window.pw-{key} windowcontrols button {{ background: {tile}; border: 1px solid {border}; color: {fg}; }}
+window.pw-{key} windowcontrols button image {{ color: {fg}; }}
+window.pw-{key} label {{ color: {fg}; }}
+window.pw-{key} headerbar label {{ text-shadow: {title_glow}; }}
+window.pw-{key} .draco-field-title, window.pw-{key} .dim-label {{ color: {dim}; }}
+window.pw-{key} .draco-dialog-head, window.pw-{key} .pw-pct {{ color: {a2}; }}
+window.pw-{key} button.pw-main label {{ color: #ffffff; }}
+window.pw-{key} progressbar.dm-progress > trough {{ background: {seg_bg}; border-radius: 8px;
+  min-height: 16px; border: none; }}
+window.pw-{key} progressbar.dm-progress > trough > progress {{ border-radius: 8px; min-height: 16px; border: none; }}
+window.pw-{key} .pw-pct {{ font-weight: bold; }}
 window.pw-{key} {{
   background-color: {base}; background-image: url("{bg_url}"); background-size: cover; color: {fg};
 }}
@@ -581,6 +599,72 @@ window.pw-{key} notebook > header tab {{
 }}
 window.pw-{key} notebook > header tab:checked {{ background: linear-gradient(135deg, {a1}, {a2}); color: #ffffff; }}
 window.pw-{key} .pw-card {{ background: {panel}; border: 1px solid {border}; border-radius: 14px; }}
+window.pw-{key}.gx-window {{ background-color: {base}; background-image: url("{gx_bg_url}");
+  background-size: cover; box-shadow: inset 0 0 0 1px alpha({a2}, 0.55), 0 0 18px alpha({a2}, 0.25); }}
+window.pw-{key} .gx-title-pct {{ font-size: 17pt; font-weight: 800; color: {a2}; }}
+window.pw-{key} .gx-title {{ font-size: 17pt; font-weight: 800; color: {fg}; text-shadow: {title_glow}; }}
+window.pw-{key} notebook.gx-tabs, window.pw-{key} notebook.gx-tabs > stack {{ background: none; }}
+window.pw-{key} notebook.gx-tabs > header {{ background: none; border: none; box-shadow: none; }}
+window.pw-{key} notebook.gx-tabs > header tab {{ background: {tile}; border: 1px solid {border};
+  border-radius: 12px 12px 0 0; padding: 10px 22px; margin: 0 8px 0 0; min-height: 30px; color: {fg}; }}
+window.pw-{key} notebook.gx-tabs > header tab:checked {{ border-color: alpha({a2}, 0.7);
+  background: linear-gradient(180deg, #2f5bea, #1d3fbf); box-shadow: inset 0 -3px 0 {a2}, 0 0 12px alpha({a2}, 0.35); }}
+window.pw-{key} notebook.gx-tabs > header tab label {{ font-size: 12pt; }}
+window.pw-{key} notebook.gx-tabs > header tab:checked label {{ color: #ffffff; }}
+window.pw-{key} notebook.gx-tabs > header tab:checked image {{ color: #ffffff; }}
+window.pw-{key} .gx-card {{ background-color: {panel}; border: 1px solid {border}; border-radius: 14px; }}
+window.pw-{key} .gx-card.gx-art {{ background-image: url("{art_url}"); background-repeat: no-repeat;
+  background-position: 100% 42%; background-size: auto 170px; }}
+window.pw-{key} .gx-pad {{ padding: 14px; }}
+window.pw-{key} .gx-url {{ background: {tile}; border-bottom: 1px solid {border}; border-radius: 14px 14px 0 0;
+  padding: 12px 22px; }}
+window.pw-{key} .gx-url label {{ font-size: 12pt; }}
+window.pw-{key} .gx-state {{ font-size: 18pt; font-weight: 700; color: {a2}; }}
+window.pw-{key} .gx-key {{ font-size: 12.5pt; color: {dim}; }}
+window.pw-{key} .gx-val {{ font-size: 12.5pt; color: {fg}; }}
+window.pw-{key} .gx-pct {{ font-size: 13pt; color: {a2}; }}
+window.pw-{key} progressbar.gx-bar > trough {{ min-height: 26px; border-radius: 13px; background: {seg_bg};
+  border: 1px solid {border}; }}
+window.pw-{key} progressbar.gx-bar > trough > progress {{ min-height: 26px; border-radius: 13px; border: none;
+  background: linear-gradient(90deg, {a1}, {a2}); }}
+window.pw-{key} button.gx-btn {{ min-height: 52px; border-radius: 12px; background: {tile}; border: 1px solid {border};
+  box-shadow: none; }}
+window.pw-{key} button.gx-btn label, window.pw-{key} button.gx-pause label {{ font-size: 13pt; }}
+window.pw-{key} button.gx-pause {{ min-height: 52px; border-radius: 12px; border: 1px solid {a2}; box-shadow: none;
+  background: linear-gradient(180deg, {a1}, shade({a1}, 0.8)); }}
+window.pw-{key} button.gx-pause label, window.pw-{key} button.gx-pause image {{ color: #ffffff; }}
+window.pw-{key} .gx-red {{ color: #f43f5e; }}
+window.pw-{key} .gx-table {{ border: 1px solid {border}; border-radius: 10px; }}
+window.pw-{key} .gx-head {{ background: {tile}; padding: 8px 0; border-radius: 10px 10px 0 0; }}
+window.pw-{key} .gx-head label {{ font-weight: 600; }}
+window.pw-{key} .gx-row {{ padding: 5px 0; }}
+window.pw-{key} .gx-row.odd {{ background: alpha({fg}, 0.045); }}
+window.pw-{key} .gx-cell {{ font-size: 12pt; }}
+window.pw-{key} progressbar.gx-thin > trough {{ min-height: 10px; border-radius: 5px; background: {seg_bg}; border: none; }}
+window.pw-{key} progressbar.gx-thin > trough > progress {{ min-height: 10px; border-radius: 5px; border: none;
+  background: linear-gradient(90deg, {a2}, {a1}); }}
+window.pw-{key} .gx-seg {{ border-radius: 6px; }}
+window.pw-{key} windowcontrols button {{ background: none; border: none; min-width: 36px; min-height: 36px; }}
+window.pw-galaxy-light .gx-state {{ color: {fg}; font-weight: 800; }}
+window.pw-galaxy-light .gx-val.yes {{ color: #16a34a; }}
+window.pw-galaxy-light .gx-dtitle {{ font-size: 12pt; color: {fg}; }}
+window.pw-galaxy-light notebook.gx-tabs > header tab:checked {{
+  background: linear-gradient(180deg, #3b8bff, #1f63f0); border-color: #3b82f6; box-shadow: 0 2px 10px alpha(#3b82f6, 0.35); }}
+window.pw-galaxy-light button.gx-pause {{ background: linear-gradient(180deg, #3b8bff, #1f63f0); border-color: #3b82f6;
+  box-shadow: 0 3px 12px alpha(#3b82f6, 0.35); }}
+window.pw-galaxy-light button.gx-cancel {{ min-height: 52px; border-radius: 12px; background: #ffe5ea; border: none;
+  box-shadow: none; }}
+window.pw-galaxy-light button.gx-cancel label {{ color: #e11d48; font-size: 13pt; }}
+window.pw-galaxy-light .gx-head label {{ border-left: 1px solid {border}; padding-left: 14px; }}
+window.pw-galaxy-light .gx-head label:first-child {{ border-left: none; padding-left: 0; }}
+window.pw-galaxy-light .gx-card.gx-art {{ background-size: auto 172px; background-position: 100% 45%; }}
+window.pw-galaxy-light progressbar.gx-bar > trough > progress {{ background: linear-gradient(90deg, #1f63f0, #22b8ff); }}
+window.pw-galaxy-light progressbar.gx-thin > trough > progress {{ background: linear-gradient(90deg, #1f63f0, #22b8ff); }}
+window.pw-galaxy-light .gx-pct {{ color: #1f63f0; font-weight: 700; }}
+window.pw-galaxy-light .gx-title-pct {{ color: #1f63f0; }}
+window.pw-galaxy-light dropdown.gx-drop > button {{ background: #ffffff; border: 1px solid {border}; border-radius: 8px; }}
+window.pw-{key} .pw-card.pw-art {{ background-image: url("{art_url}"); background-repeat: no-repeat;
+  background-position: right center; background-size: auto 100%; }}
 window.pw-{key} .pw-pad {{ padding: 12px 14px; }}
 window.pw-{key} .draco-dialog-head {{ color: {a2}; font-size: 13pt; }}
 window.pw-{key} .draco-field-title {{ color: {dim}; }}
@@ -596,11 +680,12 @@ _current = "classic"
 
 def current_palette():
     """Colours of the active dashboard theme (None for the classic themes)."""
-    return MODERN.get(_current)
+    return MODERN.get(_current) or BRIGHT.get(_current)
 
 
 def theme_names():
-    return [(key, t["name"]) for key, t in THEMES.items()] + [(key, t["name"]) for key, t in MODERN.items()]
+    return ([(key, t["name"]) for key, t in THEMES.items()] + [(key, t["name"]) for key, t in MODERN.items()]
+            + [(key, t["name"]) for key, t in BRIGHT.items()])
 
 
 def _art_url(name):
@@ -610,7 +695,12 @@ def _art_url(name):
 def progress_css():
     out = []
     for key, pal in PROGRESS_STYLES.items():
-        out.append(PROGRESS_TEMPLATE.format(key=key, bg_url=_art_url(pal["bg"]), **pal))
+        glow = "none" if pal.get("dark") else "0 0 6px #ffffff, 0 0 12px #ffffff, 0 0 18px rgba(255,255,255,0.9)"
+        art = {"galaxy": "ill-galaxy-fade.png", "galaxy-light": "ill-sky-fade.png"}.get(key, pal["art"])
+        gx_bg = {"galaxy": "pw-galaxy-bg.jpg", "galaxy-light": "pw-galaxy-light-bg.jpg"}.get(key, pal["bg"])
+        out.append(PROGRESS_TEMPLATE.format(key=key, bg_url=_art_url(pal["bg"]), art_url=_art_url(art),
+                                            gx_bg_url=_art_url(gx_bg),
+                                            title_glow=glow, **pal))
     return "".join(out)
 
 
@@ -659,6 +749,8 @@ def pastel_css(vals):
 
 
 def css_for(key):
+    if key in BRIGHT:          # + the Classic progress window (Options → General → Progress window style)
+        return bright_style.css_for(key) + progress_css()
     if key in MODERN:
         vals = dict(MODERN[key])
         vals["bg_url"] = _art_url(vals["bg"])
@@ -683,7 +775,7 @@ def apply_theme(key):
     global _provider, _current
     _current = key
     display = Gdk.Display.get_default()
-    t = MODERN.get(key) or THEMES.get(key) or THEMES["classic"]
+    t = MODERN.get(key) or BRIGHT.get(key) or THEMES.get(key) or THEMES["classic"]
     sm = Adw.StyleManager.get_default()
     if key == "system":
         sm.set_color_scheme(Adw.ColorScheme.DEFAULT)
@@ -692,11 +784,19 @@ def apply_theme(key):
     if _provider is None:
         _provider = Gtk.CssProvider()
         Gtk.StyleContext.add_provider_for_display(display, _provider, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
-    _provider.load_from_string(css_for(key if key in THEMES or key in MODERN else "classic"))
+    _provider.load_from_string(css_for(key if key in THEMES or key in MODERN or key in BRIGHT else "classic"))
+
+
+def app_icon():
+    """Draco's own app icon file (so an older installed icon never shows inside the app)."""
+    from gi.repository import Gio
+    return Gio.FileIcon.new(Gio.File.new_for_path(str(ICON_DIR / "io.github.draco.DracoDM.png")))
 
 
 def setup(theme="classic"):
     display = Gdk.Display.get_default()
-    Gtk.IconTheme.get_for_display(display).add_search_path(str(ICON_DIR))
+    theme = Gtk.IconTheme.get_for_display(display)
+    # Draco's own icons first, so an older installed app icon never shows up inside the app
+    theme.set_search_path([str(ICON_DIR)] + [p for p in theme.get_search_path() if p != str(ICON_DIR)])
     Gtk.Window.set_default_icon_name("io.github.draco.DracoDM")
     apply_theme(theme)
