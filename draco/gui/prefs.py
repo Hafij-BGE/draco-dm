@@ -52,6 +52,9 @@ class PrefsDialog(Adw.PreferencesDialog):
         g.add(self.autostart)
         p.add(g)
         g = Adw.PreferencesGroup(title="Dialogs and notifications")
+        self._switch(g, "ask_location_for_captures", "Ask where to save every download from the browser")
+        self.rows["ask_location_for_captures"].set_subtitle(
+            "Shows the File Info dialog even when Quick capture is on in the extension")
         self._switch(g, "show_progress_dialog", "Show the progress window when a download starts")
         self._switch(g, "show_complete_dialog", "Show the download complete dialog")
         self._switch(g, "notify", "Desktop notification when a download finishes")

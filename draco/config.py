@@ -82,6 +82,7 @@ DEFAULT_SETTINGS = {
     "use_category_folders": True,
     "temp_suffix": ".dracopart",
     "show_progress_dialog": True,
+    "ask_location_for_captures": True,   # files caught from the browser always show the File Info dialog
     "tray_icon": True,               # Draco icon in the top bar/system tray (show, quit)
     "background_on_close": True,     # closing the window keeps Draco running hidden (no taskbar entry)
     "show_complete_dialog": True,

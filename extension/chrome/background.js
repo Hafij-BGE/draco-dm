@@ -229,8 +229,15 @@ chrome.cookies.onChanged.addListener(({ removed }) => {
   cookieTimer = setTimeout(sendFreshCookies, 5000);   // cookies change in bursts: ask once
 });
 
-chrome.downloads.onCreated.addListener(async (item) => {
-  if (!(await isNewDownload(item)) || !shouldCapture(item)) return;
+// Chromium (Chrome, Brave, Edge, Opera, Vivaldi) asks extensions for the file name *before* it
+// shows its own "Save as" window or starts saving. Deciding there means a download Draco takes
+// never opens the browser's save window and never starts in the browser at all. Firefox has no
+// such step, so there the download is paused right after it starts instead.
+const CAN_HOLD = !!(chrome.downloads.onDeterminingFilename);
+
+async function capture(item, suggest) {
+  const release = () => { if (suggest) { try { suggest(); } catch (e) { /* already decided */ } } };
+  if (!(await isNewDownload(item)) || !shouldCapture(item)) return release();
   const url = item.finalUrl || item.url;
   const now = Date.now();
   for (const [u, r] of recent) if (now - r.t > 60000) recent.delete(u);
@@ -239,27 +246,39 @@ chrome.downloads.onCreated.addListener(async (item) => {
     // Same link again within a minute (some browsers, e.g. Brave, start a download twice).
     // If Draco already has it, drop this copy too; if Draco refused it, leave it to the browser.
     if (seen.ok) await dropBrowserDownload(item.id);
-    return;
+    return release();
   }
   const entry = { t: now, ok: true };   // assume taken while Draco checks, so a repeat is dropped
   recent.set(url, entry);
   if (item.url !== url) recent.set(item.url, entry);
-  // Pause (not cancel) first: some downloads (POST forms, one-time links such as Google Drive)
-  // can't be fetched again. Draco checks the link; only if it can download it do we cancel ours.
-  await pauseBrowserDownload(item.id);
+  // Hold (or pause) the browser's download, not cancel it: some downloads (POST forms, one-time
+  // links such as Google Drive) can't be fetched again. Only if Draco can download it do we cancel.
+  if (!suggest) await pauseBrowserDownload(item.id);
   const reply = await sendToDraco(url, {
     referer: item.referrer || "", filename: (item.filename || "").split(/[\\/]/).pop(),
-    size: item.totalBytes > 0 ? item.totalBytes : undefined, silent: state.quick, verify: true,
+    size: item.totalBytes > 0 ? item.totalBytes : (item.fileSize > 0 ? item.fileSize : undefined),
+    silent: state.quick, verify: true,
   });
   entry.ok = !!reply.ok;
   if (reply.ok) {
     await dropBrowserDownload(item.id);
+    release();
   } else {
     // Draco can't take it (not running, or the server refuses a second request): browser continues.
-    try { await chrome.downloads.resume(item.id); } catch (e) { /* ignore */ }
+    if (suggest) release();
+    else { try { await chrome.downloads.resume(item.id); } catch (e) { /* ignore */ } }
     console.warn("Left to the browser:", reply.error);
   }
-});
+}
+
+if (CAN_HOLD) {
+  chrome.downloads.onDeterminingFilename.addListener((item, suggest) => {
+    capture(item, suggest);
+    return true;   // suggest() is called later, after Draco answered
+  });
+} else {
+  chrome.downloads.onCreated.addListener((item) => { capture(item, null); });
+}
 
 // ---------------------------------------------------------------- media sniffing
 function header(details, name) {

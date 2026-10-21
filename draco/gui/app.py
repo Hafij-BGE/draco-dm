@@ -383,7 +383,10 @@ class DracoApp(Adw.Application):
     def _file_info(self, item, err, req):
         if not item.get("filename"):
             item["filename"] = util_name(item["url"], item.get("kind"))
-        if (self.settings["start_immediately"] or req.get("silent")) and not err:
+        quick = self.settings["start_immediately"] or req.get("silent")
+        if req.get("verify") and self.settings.get("ask_location_for_captures", True):
+            quick = False   # a file the browser was about to save: let the user confirm where
+        if quick and not err:
             # Quick capture skips the confirmation dialog, not the progress window.
             self.manager.add(item, start=True)
             if self.settings["show_progress_dialog"]:
