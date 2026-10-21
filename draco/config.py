@@ -84,6 +84,7 @@ DEFAULT_SETTINGS = {
     "show_progress_dialog": True,
     "progress_view": "app",            # dashboard themes: "app" = details pane in the main window, "window"
     "details_pane": True,
+    "sidebar_collapsed": False,
     "progress_styles": {},             # category -> progress look (see style.PROGRESS_STYLES); missing = auto
     "ask_location_for_captures": True,   # files caught from the browser always show the File Info dialog
     "tray_icon": True,               # Draco icon in the top bar/system tray (show, quit)

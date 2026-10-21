@@ -93,11 +93,16 @@ class MainWindow(ModernLayout, Adw.ApplicationWindow):
     # ------------------------------------------------------------------ UI
     def apply_layout(self):
         """Classic menu-bar layout, or the dashboard for the dashboard themes. Rebuilt on theme change."""
-        want = "modern" if style.is_modern(self.app.settings.get("theme")) else "classic"
-        if want == self.layout:
+        theme = self.app.settings.get("theme")
+        want = "modern" if style.is_modern(theme) else "classic"
+        # dashboard themes differ in extras (Cosmic Dashboard), so a switch between them rebuilds too
+        if want == self.layout and (want == "classic" or theme == getattr(self, "_layout_theme", None)):
             return
         self.layout = want
+        self._layout_theme = theme
+        self.browser = False
         self.detail_views = []
+        self.cosmic = None
         if want == "modern":
             self.add_css_class("dm-window")
             content = self._build_modern()
@@ -761,6 +766,8 @@ class MainWindow(ModernLayout, Adw.ApplicationWindow):
             return it.get("category") == val
         if kind == "unfinished":
             return it["status"] != "complete"
+        if kind == "downloading":
+            return it["status"] in ACTIVE
         if kind == "finished":
             return it["status"] == "complete"
         if kind == "queue":
@@ -780,6 +787,8 @@ class MainWindow(ModernLayout, Adw.ApplicationWindow):
             GLib.idle_add(self._handle_event, event, payload)
 
     def _handle_event(self, event, payload):
+        if getattr(self, "cosmic", None) is not None and self.layout == "modern" and isinstance(payload, dict):
+            self.cosmic.note(event, payload)
         if event == "added" and payload["id"] not in self.objs:
             self._add_obj(payload)
         elif event == "removed":

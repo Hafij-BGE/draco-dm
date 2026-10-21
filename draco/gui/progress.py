@@ -24,7 +24,7 @@ class ProgressView(Gtk.Box):
     """Everything about one download. `pstyle` picks a dashboard look (None = classic);
     `embedded` = shown inside the main window, so it stays when the download completes."""
 
-    def __init__(self, app, item, pstyle=None, embedded=False, on_close=None):
+    def __init__(self, app, item, pstyle=None, embedded=False, on_close=None, design=""):
         super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=8)
         self.app = app
         self.item = item
@@ -34,6 +34,11 @@ class ProgressView(Gtk.Box):
         self.on_close = on_close or (lambda: None)
         self._last = {}            # segment index -> (bytes, time) for per-connection speed
         item.setdefault("on_done", {})
+        self.design = design
+        if design == "browser":
+            self._build_browser()
+            self.update()
+            return
 
         nb = Gtk.Notebook()
         nb.add_css_class("draco-tabs")
@@ -71,7 +76,8 @@ class ProgressView(Gtk.Box):
         for col, title in enumerate(heads):
             self.conn_grid.attach(util.label(title, css=["head"]), col, 0, 1, 1)
         self.conn_rows = []
-        dbox.append(Gtk.ScrolledWindow(child=self.conn_grid, min_content_height=150, max_content_height=260,
+        dbox.append(Gtk.ScrolledWindow(child=self.conn_grid, min_content_height=90 if embedded else 150,
+                                       max_content_height=200 if embedded else 260,
                                        propagate_natural_height=True))
         self.details.set_child(dbox)
         self.append(self.details)
@@ -79,12 +85,125 @@ class ProgressView(Gtk.Box):
             self._toggle_details()
         self.update()
 
+    # -- Galaxy Explorer details-pane layout -----------------------------------
+    def _build_browser(self):
+        """File header, big percentage, Pause/Stop/Close, Info / Speed Limiter / Options /
+        Connections tabs, and the connection map with per-connection progress below."""
+        from gi.repository import Pango
+        it = self.item
+        head = Gtk.Box(spacing=14, margin_top=6)
+        self.file_icon = Gtk.Image(gicon=util.icon_for_file(it.get("filename") or "x.bin"), pixel_size=52)
+        head.append(self.file_icon)
+        words = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2, hexpand=True, valign=Gtk.Align.CENTER)
+        self.name_lbl = util.label("", css=["dm-detail-name"])
+        self.name_lbl.set_ellipsize(Pango.EllipsizeMode.END)
+        words.append(self.name_lbl)
+        self.url_lbl = util.label(it["url"], css=["dim-label"])
+        words.append(self.url_lbl)
+        head.append(words)
+        copy = Gtk.Button(icon_name="edit-copy-symbolic", tooltip_text="Copy address", valign=Gtk.Align.CENTER)
+        copy.add_css_class("flat")
+        copy.connect("clicked", lambda *_: self.get_clipboard().set(self.item["url"]))
+        head.append(copy)
+        self.append(head)
+
+        row = Gtk.Box(spacing=18, margin_top=6)
+        self.big_pct = util.label("0%", css=["dm-big-pct"], ellipsize=False)
+        self.big_pct.set_valign(Gtk.Align.CENTER)
+        row.append(self.big_pct)
+        col = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6, hexpand=True, valign=Gtk.Align.CENTER)
+        self.status_lbl = util.label("", css=["dm-detail-status"])
+        col.append(self.status_lbl)
+        self.bar = Gtk.ProgressBar(hexpand=True)
+        self.bar.add_css_class("dm-progress")
+        col.append(self.bar)
+        summary = Gtk.Box(homogeneous=True)
+        self.sum_done = util.label("", ellipsize=False)
+        self.sum_rate = util.label("", xalign=0.6, ellipsize=False)
+        self.sum_eta = util.label("", xalign=1, ellipsize=False)
+        for w in (self.sum_done, self.sum_rate, self.sum_eta):
+            w.add_css_class("dm-detail-sum")
+            summary.append(w)
+        col.append(summary)
+        row.append(col)
+        self.append(row)
+
+        btns = Gtk.Box(spacing=10, margin_top=6)
+        self.pause_btn = Gtk.Button(label="Pause", width_request=118)
+        self.pause_btn.add_css_class("pw-main")
+        self.pause_btn.connect("clicked", self._toggle_pause)
+        stop = Gtk.Button(label="Stop", width_request=118)
+        stop.connect("clicked", lambda *_: self.manager.pause(self.item["id"]))
+        close = Gtk.Button(label="Close", width_request=118, tooltip_text="Close this tab (the download continues)")
+        close.connect("clicked", self._cancel)
+        for b in (self.pause_btn, stop, close):
+            btns.append(b)
+        self.append(btns)
+
+        nb = Gtk.Notebook(margin_top=8)
+        nb.add_css_class("dm-inner-tabs")
+        info = Gtk.Box(spacing=14, margin_top=10, margin_bottom=6, margin_start=8, margin_end=8)
+        grid = Gtk.Grid(column_spacing=22, row_spacing=5, valign=Gtk.Align.CENTER)
+        self.fields = {}
+        for r, (key, title) in enumerate([("size", "File size"), ("done", "Downloaded"), ("rate", "Transfer rate"),
+                                          ("eta", "Time left"), ("resume", "Resume capability")]):
+            grid.attach(util.label(title, css=["draco-field-title"], ellipsize=False), 0, r, 1, 1)
+            v = util.label(ellipsize=False)
+            grid.attach(v, 1, r, 1, 1)
+            self.fields[key] = v
+        info.append(grid)
+        speed = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4, hexpand=True)
+        speed.add_css_class("pw-card")
+        speed.add_css_class("pw-pad")
+        top = Gtk.Box()
+        top.append(util.label("Speed", css=["dm-ring-title"], ellipsize=False))
+        top.append(Gtk.Box(hexpand=True))
+        self.graph_value = util.label("", css=["pw-pct"], ellipsize=False)
+        top.append(self.graph_value)
+        speed.append(top)
+        self.graph = Sparkline(height=86)
+        speed.append(self.graph)
+        info.append(speed)
+        nb.append_page(info, Gtk.Label(label="Info"))
+        nb.append_page(self._limiter_page(), Gtk.Label(label="Speed Limiter"))
+        nb.append_page(self._options_page(), Gtk.Label(label="Options on completion"))
+        conn_info = Gtk.Grid(column_spacing=22, row_spacing=5, margin_top=10, margin_start=8)
+        self.conn_stats = {}
+        for r, (key, title) in enumerate([("using", "Connections in use"), ("parts", "Parts finished"),
+                                          ("avg", "Average per connection"), ("limit", "Connections allowed")]):
+            conn_info.attach(util.label(title, css=["draco-field-title"], ellipsize=False), 0, r, 1, 1)
+            v = util.label(ellipsize=False)
+            conn_info.attach(v, 1, r, 1, 1)
+            self.conn_stats[key] = v
+        self.conn_tab = Gtk.Label(label="Connections")
+        nb.append_page(conn_info, self.conn_tab)
+        self.append(nb)
+
+        conns = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6, margin_top=8, vexpand=True)
+        conns.add_css_class("pw-card")
+        conns.add_css_class("pw-pad")
+        conns.append(util.label("Start positions and download progress by connections", css=["dm-ring-title"]))
+        self.map = SegmentMap(it, self.pstyle)
+        self.map.add_css_class("draco-segbar")
+        conns.append(self.map)
+        self.conn_grid = Gtk.Grid(column_spacing=18, row_spacing=3)
+        self.conn_grid.add_css_class("draco-conn-table")
+        for c, title in enumerate(("N.", "Downloaded", "Info", "Progress", "Speed")):
+            self.conn_grid.attach(util.label(title, css=["head"]), c, 0, 1, 1)
+        self.conn_rows = []
+        conns.append(Gtk.ScrolledWindow(child=self.conn_grid, vexpand=True, min_content_height=150))
+        self.append(conns)
+        self.pct_lbl = Gtk.Label()                       # classic window only
+        self.details = Gtk.Revealer(reveal_child=True)    # connections always shown here
+        self.pstyle = self.pstyle or "galaxy"             # per-connection progress bars + speed
+
     # -- pages -----------------------------------------------------------
     def _status_page(self):
         box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=8, margin_start=10, margin_end=10,
                       margin_top=10, margin_bottom=10)
         if self.pstyle:
             box.add_css_class("pw-card")
+            box.add_css_class("pw-pad")
         self.url_lbl = util.label(self.item["url"], selectable=True)
         box.append(self.url_lbl)
         self.status_lbl = util.label("", css=["draco-dialog-head"])
@@ -120,7 +239,7 @@ class ProgressView(Gtk.Box):
             bar_row.append(self.pct_lbl)
         box.append(bar_row)
         if self.pstyle and self.embedded:
-            self.graph = Sparkline(height=60)
+            self.graph = Sparkline(height=36)
             box.append(util.label("Speed", css=["draco-field-title"]))
             box.append(self.graph)
         return box
@@ -206,12 +325,34 @@ class ProgressView(Gtk.Box):
                              ("Unknown" if not it.get("probed") else "No"))
         self.bar.set_fraction(frac)
         self.pct_lbl.set_text(f"{frac * 100:.0f}%")
+        if self.design == "browser":
+            name = it.get("filename") or it["url"].rsplit("/", 1)[-1]
+            if self.name_lbl.get_text() != name:
+                self.name_lbl.set_text(name)
+                self.file_icon.set_from_gicon(util.icon_for_file(name))
+            self.big_pct.set_text(f"{frac * 100:.0f}%")
+            self.sum_done.set_text(fmt_size(it.get("downloaded", 0)) + (f" / {fmt_size(size)}" if size > 0 else ""))
+            self.sum_rate.set_text(fmt_speed(it.get("speed")) if st == "downloading" else "")
+            self.sum_eta.set_text(fmt_eta(util.eta(it)) or "")
+            self.graph_value.set_text(fmt_speed(it.get("speed")) if st == "downloading" else "")
+            segs = it.get("segments") or []
+            open_ = [sg for sg in segs if sg["e"] < 0 or sg["p"] < sg["e"]]
+            self.conn_tab.set_text(f"Connections ({len(segs)})" if segs else "Connections")
+            using = len(open_) if task else 0
+            self.conn_stats["using"].set_text(str(using))
+            self.conn_stats["parts"].set_text(f"{len(segs) - len(open_)} of {len(segs)}" if segs else "—")
+            self.conn_stats["avg"].set_text(fmt_speed((it.get("speed") or 0) / using) if using else "—")
+            self.conn_stats["limit"].set_text(str(it.get("connections") or self.app.settings["connections"]))
         for c, on in (("done", st == "complete"), ("failed", st == "error")):
             (self.bar.add_css_class if on else self.bar.remove_css_class)(c)
         if self.graph is not None:
             self.graph.push(it.get("speed", 0) if st == "downloading" else 0)
         self.pause_btn.set_label("Pause" if task else "Resume")
         self.pause_btn.set_sensitive(st != "complete")
+        if self.embedded and self.design != "browser":
+            has_conns = bool(it.get("segments") or it.get("seg_total"))
+            self.details.set_visible(has_conns)
+            self.details_btn.set_visible(has_conns)
         if self.details.get_reveal_child():
             self.map.queue_draw()
             self._update_connections(task)

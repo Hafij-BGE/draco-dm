@@ -171,6 +171,7 @@ def _modern(**kw):
         p1="#7b5cff", p2="#20c4ff", ok1="#18c964", ok2="#7dff9a", ok="#36e07a", err="#ff5b7b",
         warn="#ffb020", active="#5aa8ff", glow="rgba(90,110,255,0.45)", trough="rgba(255,255,255,0.08)",
         radius="14px", pw="galaxy", pct="#ffffff", pct_shadow="0 1px 2px rgba(0,0,0,0.6)",
+        tile_hi="rgba(70,82,190,0.55)", stars="tile-stars.png", card_stars="card-stars.png",
     )
     base.update(kw)
     return base
@@ -182,14 +183,15 @@ MODERN = {
         bg="bg-cosmic-minimal.jpg", base="#060b1e", base2="#08102a", panel="rgba(9,15,38,0.92)",
         panel_solid="#0a1230", border="rgba(80,120,220,0.25)", a1="#2f6bff", a2="#2f9bff",
         tile="rgba(16,26,60,0.85)", tile_hover="rgba(36,60,130,0.9)", tile_border="rgba(80,120,220,0.3)",
-        glow="rgba(47,107,255,0.35)")},
+        glow="rgba(47,107,255,0.35)", tile_hi="rgba(40,72,160,0.6)")},
     "nebula-glow": {"name": "Nebula Glow (dashboard)", **_modern(
         bg="bg-nebula-glow.jpg", base="#180626", base2="#260a3a", panel="rgba(32,10,54,0.74)",
         panel_solid="#260a40", border="rgba(255,90,220,0.30)", fg="#fbeaff", dim="#c9a3dc",
         a1="#ff4fd8", a2="#8a5cff", accent="#d75cff", tile="rgba(60,16,90,0.70)",
         tile_hover="rgba(120,30,150,0.85)", tile_border="rgba(255,110,230,0.35)",
         sel="rgba(220,80,255,0.32)", hover="rgba(255,90,220,0.12)", line="rgba(255,120,230,0.08)",
-        p1="#ff4fd8", p2="#8a5cff", glow="rgba(255,79,216,0.45)", active="#ff8ae8", pw="music")},
+        p1="#ff4fd8", p2="#8a5cff", glow="rgba(255,79,216,0.45)", active="#ff8ae8", pw="music",
+        tile_hi="rgba(150,40,170,0.55)")},
     "aurora-light": {"name": "Aurora Light (dashboard)", **_modern(
         dark=False, bg="bg-aurora-light.jpg", base="#eceeff", base2="#f6f4ff",
         panel="rgba(255,255,255,0.76)", panel_solid="#f8f8ff", border="rgba(140,140,220,0.35)",
@@ -198,7 +200,8 @@ MODERN = {
         sel="rgba(108,92,255,0.18)", hover="rgba(108,92,255,0.08)", line="rgba(40,40,120,0.06)",
         p1="#7b5cff", p2="#3c8bff", ok="#13a456", err="#e0344f", active="#3c6bff",
         glow="rgba(108,92,255,0.25)", trough="rgba(40,40,120,0.10)", pw="compressed",
-        pct="#1d2140", pct_shadow="0 0 3px rgba(255,255,255,0.9)")},
+        pct="#1d2140", pct_shadow="0 0 3px rgba(255,255,255,0.9)", tile_hi="rgba(255,255,255,0.98)",
+        stars="tile-stars-dark.png", card_stars=None)},
 }
 
 # Progress-window looks per download category in the dashboard themes.
@@ -248,14 +251,14 @@ def seg_colors(pstyle):
 
 
 # ---------------------------------------------------------------- icon styles
-ICON_STYLES = [("auto", "Match theme"), ("color", "Colourful"), ("flat", "Flat"),
+ICON_STYLES = [("auto", "Match theme"), ("modern", "Modern"), ("color", "Colourful"), ("flat", "Flat"),
                ("mono", "Monochrome"), ("accent", "Accent colour")]
 # Which icon style each theme uses when the choice is "Match theme".
 THEME_ICONS = {"system": "mono", "classic": "color", "retro": "color", "soft-light": "flat", "galaxy": "accent",
                "dark": "mono", "midnight": "accent", "nightshade": "accent", "arctic": "accent",
                "sand": "flat", "deep-teal": "accent", "forest": "flat", "sunset": "flat",
-               "high-contrast": "mono", "galaxy-explorer": "color", "cosmic-minimal": "color",
-               "nebula-glow": "color", "aurora-light": "color"}
+               "high-contrast": "mono", "galaxy-explorer": "modern", "cosmic-minimal": "modern",
+               "nebula-glow": "modern", "aurora-light": "modern"}
 def current_theme(key):
     """A saved theme name, or Draco Classic if it no longer exists (themes were renamed in 1.4.4)."""
     return key if key in THEMES or key in MODERN else "classic"
@@ -271,7 +274,8 @@ SYMBOLIC = {
     "cat-compressed": "package-x-generic-symbolic", "cat-documents": "x-office-document-symbolic",
     "cat-music": "audio-x-generic-symbolic", "cat-programs": "application-x-executable-symbolic",
     "cat-video": "video-x-generic-symbolic", "cat-general": "folder-symbolic",
-    "unfinished": "content-loading-symbolic", "finished": "emblem-ok-symbolic",
+    "unfinished": "content-loading-symbolic", "finished": "object-select-symbolic", "home": "go-home-symbolic",
+    "pulse": "utilities-system-monitor-symbolic",
     "queues": "view-list-ordered-symbolic", "queue": "view-list-symbolic",
 }
 # Semantic tint in the accent style: go = success colour, danger = error colour, rest = accent.
@@ -286,10 +290,12 @@ def resolve_icon_style(theme, choice):
 
 
 def icon_name(base, style):
-    if style == "color":
-        return f"draco-{base}"
+    if style == "modern" and (ICON_DIR / f"draco-m-{base}.svg").exists():
+        return f"draco-m-{base}"
+    if style in ("modern", "color"):
+        return f"draco-{base}" if (ICON_DIR / f"draco-{base}.svg").exists() else "draco-folder-all"
     if style == "flat":
-        return f"draco-flat-{base}"
+        return f"draco-flat-{base}" if (ICON_DIR / f"draco-flat-{base}.svg").exists() else "draco-flat-folder-all"
     return SYMBOLIC.get(base, "image-missing-symbolic")
 
 
@@ -407,41 +413,72 @@ window.dm-window {{
 .dm-tiles {{ margin-top: 4px; }}
 button.dm-tile {{
   min-width: 74px; min-height: 66px; padding: 4px 6px; border-radius: 12px; color: {fg};
-  background: {tile}; border: 1px solid {tile_border}; box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+  background-color: {tile}; background-image: url("{stars_url}"), linear-gradient(to bottom, {tile_hi}, {tile});
+  background-size: 96px 96px, auto; background-repeat: repeat, no-repeat; background-position: 0 0, center;
+  border: 1px solid {tile_border}; box-shadow: 0 2px 10px rgba(0,0,0,0.30), inset 0 1px rgba(255,255,255,0.10);
 }}
-button.dm-tile:hover {{ background: {tile_hover}; box-shadow: 0 0 14px {glow}; }}
+button.dm-tile:hover {{
+  background-image: url("{stars_url}"), linear-gradient(to bottom, {tile_hover}, {tile});
+  box-shadow: 0 0 16px {glow}, inset 0 1px rgba(255,255,255,0.18);
+}}
+button.dm-tile:disabled {{ opacity: 1; filter: none; }}
 button.dm-tile:disabled > box {{ opacity: 0.4; }}
 button.dm-tile label {{ font-size: 9.5pt; }}
 button.dm-tile.primary {{
-  background: linear-gradient(135deg, {a1}, {a2}); color: #ffffff; border-color: transparent;
-  box-shadow: 0 0 18px {glow};
+  background-color: alpha({a1}, 0.16);
+  background-image: url("{stars_url}"), linear-gradient(135deg, alpha({a1}, 0.30), alpha({a2}, 0.18));
+  color: {fg}; border: 1px solid alpha({a2}, 0.75); box-shadow: 0 0 14px {glow}, inset 0 1px rgba(255,255,255,0.12);
 }}
+button.dm-tile.primary:hover {{
+  background-image: url("{stars_url}"), linear-gradient(135deg, alpha({a1}, 0.45), alpha({a2}, 0.30));
+  box-shadow: 0 0 20px {glow};
+}}
+button.dm-tile.primary image {{ color: {a2}; -gtk-icon-shadow: 0 0 8px {glow}; }}
 button.dm-icon-btn {{
-  min-width: 38px; min-height: 38px; border-radius: 10px; background: {tile}; border: 1px solid {tile_border};
+  min-width: 38px; min-height: 38px; border-radius: 10px; border: 1px solid {tile_border};
+  background-color: {tile}; background-image: url("{stars_url}"), linear-gradient(to bottom, {tile_hi}, {tile});
+  background-size: 96px 96px, auto; background-repeat: repeat, no-repeat;
 }}
-button.dm-icon-btn:hover {{ background: {tile_hover}; }}
+button.dm-icon-btn:hover {{ box-shadow: 0 0 12px {glow}; }}
 .dm-card {{
-  background: {panel}; border: 1px solid {border}; border-radius: {radius};
+  background-color: {panel}; background-image: {card_stars_css}; background-size: 600px 600px;
+  background-repeat: repeat; border: 1px solid {border}; border-radius: {radius};
   box-shadow: 0 4px 22px rgba(0,0,0,0.30);
 }}
 .dm-stat-title {{ color: {dim}; font-size: 9.5pt; }}
 .dm-stat-value {{ font-size: 18pt; font-weight: 800; color: {fg}; }}
 .dm-ring-label {{ font-size: 9pt; color: {dim}; }}
-.dm-stat-big {{ font-size: 24pt; }}
+.dm-cosmic-title {{ font-size: 9pt; font-weight: bold; letter-spacing: 2px; color: {a2}; }}
+progressbar.dm-thin > trough, progressbar.dm-thin > trough > progress {{ min-height: 6px; }}
 .dm-ring-num {{ font-size: 13pt; font-weight: 800; color: {fg}; }}
 
-.dm-side {{ padding: 8px; }}
+.dm-side {{ padding: 8px 0 4px 8px; }}
 .dm-side list {{ background: none; color: {fg}; }}
-.dm-side row {{ border-radius: 10px; padding: 6px 8px; margin: 1px 0; }}
-.dm-side row:hover:not(:selected) {{ background: {hover}; }}
-.dm-side row:selected {{ background: linear-gradient(90deg, {a1}, {a2}); color: #ffffff; box-shadow: 0 0 12px {glow}; }}
-.dm-side row:selected label {{ color: #ffffff; }}
-.dm-side-head {{ color: {dim}; font-weight: bold; font-size: 9.5pt; margin: 10px 8px 2px 8px; }}
-.dm-badge {{
-  background: {tile}; border: 1px solid {tile_border}; border-radius: 9px; padding: 0 8px;
-  font-size: 9pt; min-width: 18px;
+.dm-side row {{
+  border-radius: 0; padding: 5px 12px 5px 6px; margin: 0; min-height: 22px; font-size: 9.5pt; color: {dim};
 }}
-.dm-side row:selected .dm-badge {{ background: rgba(255,255,255,0.22); border-color: transparent; }}
+.dm-side row label {{ color: {dim}; }}
+.dm-side row .dm-side-icon {{ color: {dim}; }}
+.dm-side row:hover:not(:selected) {{ background: none; }}
+.dm-side row:hover:not(:selected) label, .dm-side row:hover:not(:selected) .dm-side-icon {{ color: {fg}; }}
+.dm-side row:selected {{ background: none; box-shadow: inset -4px 0 0 0 {a2}; }}
+.dm-side row:selected label {{ color: {fg}; font-weight: bold; }}
+.dm-side row:selected .dm-side-icon {{ color: {fg}; }}
+.dm-side-head {{ color: {dim}; font-size: 8pt; letter-spacing: 1px; margin: 10px 6px 2px 6px; }}
+.dm-count {{ color: {dim}; font-size: 8.5pt; }}
+.dm-side row:selected .dm-count {{ color: {a2}; font-weight: bold; }}
+.dm-queue-dot {{ min-width: 9px; min-height: 9px; border-radius: 2px; }}
+.dm-queue-dot-0 {{ background: #38bdf8; }}
+.dm-queue-dot-1 {{ background: #fb923c; }}
+.dm-queue-dot-2 {{ background: #a78bfa; }}
+.dm-queue-dot-3 {{ background: #34d399; }}
+button.dm-side-foot {{ padding: 5px 6px; color: {dim}; font-size: 9.5pt; }}
+button.dm-side-toggle {{ min-width: 26px; min-height: 26px; padding: 2px; color: {dim}; }}
+.dm-side.collapsed {{ padding-left: 4px; }}
+.dm-side.collapsed row {{ padding: 6px 0 6px 8px; }}
+.dm-side.collapsed > box:first-child {{ margin-end: 0; }}
+button.dm-side-foot:hover {{ color: {fg}; background: none; }}
+button.dm-side-foot .dm-side-icon {{ color: inherit; }}
 
 .dm-tabs togglebutton {{
   border-radius: 10px; padding: 5px 14px; background: {tile}; border: 1px solid {tile_border}; color: {fg};
@@ -482,9 +519,39 @@ switch:checked {{ background: linear-gradient(90deg, {a1}, {a2}); }}
 .dm-details notebook > header {{ background: none; border: none; }}
 .dm-details notebook > header tab {{ border-radius: 10px 10px 0 0; padding: 4px 8px; }}
 .dm-details notebook > header tab:checked {{ background: linear-gradient(135deg, {a1}, {a2}); color: #ffffff; }}
-.dm-big-pct {{ font-size: 26pt; font-weight: 800; color: {fg}; }}
-.dm-details .pw-card {{ background: rgba(0,0,0,0.12); border: 1px solid {border}; border-radius: 12px; }}
-.dm-details .pw-pad {{ padding: 10px; }}
+.dm-big-pct {{ font-size: 28pt; font-weight: 800; color: {fg}; }}
+.dm-detail-name {{ font-size: 13pt; font-weight: bold; color: {fg}; }}
+.dm-detail-status {{ font-size: 12pt; font-weight: bold; color: {fg}; }}
+.dm-detail-sum {{ font-size: 11pt; color: {fg}; }}
+.dm-big-num {{ font-size: 14pt; font-weight: bold; color: {fg}; }}
+.dm-brand-line {{ font-size: 17pt; font-weight: 800; color: {fg}; }}
+.dm-ring-big {{ font-size: 26pt; }}
+.dm-strip-lead {{ font-size: 11pt; color: {fg}; }}
+.dm-strip-value {{ font-size: 14pt; font-weight: bold; color: {fg}; }}
+.dm-strip-graph-val {{ font-size: 11pt; font-weight: bold; color: {a2}; }}
+button.dm-tile.dm-tile-compact {{ min-width: 64px; min-height: 58px; padding: 3px 8px; }}
+button.dm-tile.dm-tile-compact label {{ font-size: 9pt; }}
+.dm-group > button.dm-tile:not(:first-child) {{ border-top-left-radius: 0; border-bottom-left-radius: 0; border-left-width: 0; }}
+.dm-group > button.dm-tile:not(:last-child) {{ border-top-right-radius: 0; border-bottom-right-radius: 0; }}
+.dm-dot-active {{ background: {a2}; box-shadow: 0 0 8px {a2}; }}
+.dm-details notebook.dm-inner-tabs > header tab {{
+  background: {tile}; border: 1px solid {tile_border}; border-radius: 9px; margin: 0 4px 0 0; padding: 4px 12px;
+  color: {fg};
+}}
+.dm-details notebook.dm-inner-tabs > header tab:checked {{ background: linear-gradient(135deg, {a1}, {a2}); color: #ffffff; }}
+.dm-details notebook.dm-inner-tabs, .dm-details notebook.dm-inner-tabs > stack {{ background: none; }}
+.dm-browser button.dm-tile {{ min-width: 66px; min-height: 60px; padding: 3px 6px; }}
+.dm-browser button.dm-tile label {{ font-size: 9pt; }}
+.dm-browser progressbar.dm-progress.cat-compressed > trough > progress {{ background: linear-gradient(90deg, #f59e0b, #fcd34d); }}
+.dm-browser progressbar.dm-progress.cat-documents > trough > progress {{ background: linear-gradient(90deg, #3b82f6, #60a5fa); }}
+.dm-browser progressbar.dm-progress.cat-music > trough > progress {{ background: linear-gradient(90deg, #10b981, #5eead4); }}
+.dm-browser progressbar.dm-progress.cat-video > trough > progress {{ background: linear-gradient(90deg, #8b5cf6, #c084fc); }}
+.dm-browser progressbar.dm-progress.cat-programs > trough > progress {{ background: linear-gradient(90deg, #22d3ee, #67e8f9); }}
+.dm-browser progressbar.dm-progress.cat-general > trough > progress {{ background: linear-gradient(90deg, #06b6d4, #2dd4bf); }}
+.dm-browser progressbar.dm-progress.done > trough > progress {{ background: linear-gradient(90deg, {ok1}, {ok2}); }}
+.dm-browser progressbar.dm-progress.failed > trough > progress {{ background: linear-gradient(90deg, {err}, {err}); }}
+.dm-details .pw-card {{ background: {hover}; border: 1px solid {border}; border-radius: 12px; }}
+.dm-details .pw-pad {{ padding: 12px 14px; }}
 .dm-details .pw-pct {{ color: {a2}; font-weight: bold; }}
 .dm-details .draco-dialog-head {{ color: {a2}; }}
 .dm-details button.pw-main {{ background: linear-gradient(135deg, {a1}, {a2}); color: #ffffff; }}
@@ -496,6 +563,7 @@ switch:checked {{ background: linear-gradient(90deg, {a1}, {a2}); }}
 popover.menu contents, popover > contents {{ background: {panel_solid}; color: {fg}; }}
 button.suggested-action {{ background: linear-gradient(135deg, {a1}, {a2}); color: #ffffff; }}
 {progress_css}
+{planet_css}
 """
 
 PROGRESS_TEMPLATE = """
@@ -513,7 +581,7 @@ window.pw-{key} notebook > header tab {{
 }}
 window.pw-{key} notebook > header tab:checked {{ background: linear-gradient(135deg, {a1}, {a2}); color: #ffffff; }}
 window.pw-{key} .pw-card {{ background: {panel}; border: 1px solid {border}; border-radius: 14px; }}
-window.pw-{key} .pw-pad {{ padding: 10px; }}
+window.pw-{key} .pw-pad {{ padding: 12px 14px; }}
 window.pw-{key} .draco-dialog-head {{ color: {a2}; font-size: 13pt; }}
 window.pw-{key} .draco-field-title {{ color: {dim}; }}
 window.pw-{key} progressbar.dm-progress > trough > progress {{ background: linear-gradient(90deg, {a1}, {a2}); }}
@@ -546,11 +614,60 @@ def progress_css():
     return "".join(out)
 
 
+PLANETS = ["earth", "saturn", "mars", "jupiter", "neptune", "moon", "venus", "uranus", "ice"]
+# where the planet peeks out of each button (x %, y %, size px): varied so the row looks natural
+PLANET_SPOTS = [(116, -22, 28), (114, -26, 34), (-14, -22, 26), (116, -20, 30), (115, -24, 28),
+                (-16, -20, 26), (116, -22, 28), (112, -28, 36), (116, -22, 28)]
+
+
+def planet_css(vals):
+    """Each toolbar button: stars on top, its own planet in a corner, the tile colour below."""
+    out = []
+    for i, name in enumerate(PLANETS, start=1):
+        x, y, size = PLANET_SPOTS[i - 1]
+        planet = _art_url(f"planet-{name}.png")
+        sel = (f".dm-tiles > button.dm-tile:nth-child({i}):not(.primary), "
+               f".dm-group:nth-child({i}) > button.dm-tile:not(.primary)")
+        hover = ", ".join(f"{part.strip()}:hover" for part in sel.split(","))
+        for selector, top in ((sel, vals["tile_hi"]), (hover, vals["tile_hover"])):
+            out.append(
+                f"{selector} {{ background-image: url(\"{vals['stars_url']}\"), url(\"{planet}\"), "
+                f"linear-gradient(to bottom, {top}, {vals['tile']}); "
+                f"background-size: 96px 96px, {size}px {size}px, auto; "
+                f"background-repeat: repeat, no-repeat, no-repeat; "
+                f"background-position: {i * 23 % 96}px {i * 37 % 96}px, {x}% {y}%, center; }}")
+    return "\n".join(out)
+
+
+PASTELS = [("#e0f2fe", "#bae6fd", "#7dd3fc"), ("#dcfce7", "#bbf7d0", "#86efac"), ("#fee2e2", "#fecaca", "#fca5a5"),
+           ("#ede9fe", "#ddd6fe", "#c4b5fd"), ("#ffedd5", "#fed7aa", "#fdba74"), ("#e0e7ff", "#c7d2fe", "#a5b4fc"),
+           ("#fae8ff", "#f5d0fe", "#f0abfc"), ("#ccfbf1", "#99f6e4", "#5eead4"), ("#fef9c3", "#fef08a", "#fde047")]
+
+
+def pastel_css(vals):
+    """Aurora Light: every toolbar button gets its own soft colour (stars stay on top)."""
+    out = []
+    for i, (top, bottom, border) in enumerate(PASTELS, start=1):
+        sel = (f".dm-tiles > button.dm-tile:nth-child({i}):not(.primary), "
+               f".dm-group:nth-child({i}) > button.dm-tile:not(.primary)")
+        hover = ", ".join(f"{part.strip()}:hover" for part in sel.split(","))
+        out.append(f"{sel} {{ background-image: url(\"{vals['stars_url']}\"), linear-gradient(to bottom, {top}, {bottom}); "
+                   f"background-size: 96px 96px, auto; background-repeat: repeat, no-repeat; border-color: {border}; }}")
+        out.append(f"{hover} {{ background-image: url(\"{vals['stars_url']}\"), linear-gradient(to bottom, #ffffff, {bottom}); "
+                   f"box-shadow: 0 0 12px {border}; }}")
+    return "\n".join(out)
+
+
 def css_for(key):
     if key in MODERN:
         vals = dict(MODERN[key])
         vals["bg_url"] = _art_url(vals["bg"])
+        vals["stars_url"] = _art_url(vals["stars"])
+        vals["stars_light_url"] = _art_url("tile-stars.png")
+        vals["card_stars_css"] = f'url("{_art_url(vals["card_stars"])}")' if vals["card_stars"] else "none"
         vals["progress_css"] = progress_css()
+        vals["planet_css"] = (planet_css(vals) if key == "galaxy-explorer"          # planets: Galaxy Explorer only
+                              else pastel_css(vals) if key == "aurora-light" else "")
         return MODERN_TEMPLATE.format(**vals)
     t = THEMES.get(key)
     if not t or key == "system":

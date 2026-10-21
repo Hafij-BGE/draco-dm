@@ -119,10 +119,11 @@ After an update, Draco refreshes its copy of the extension. Click **Reload** on 
 Switch instantly under **View → Theme** or with the palette button.
 
 **Dashboard themes:** *Galaxy Explorer*, *Cosmic Minimal*, *Nebula Glow* and *Aurora Light* change the whole window:
-- a header with a live total-speed graph and Active / Completed / Queued rings
-- category and queue counts in the sidebar
-- All / Downloading / Completed tabs, and a progress bar in every row
-- a details pane that shows the full progress of open downloads as tabs
+- toolbar tiles with a star field (each Galaxy Explorer button also has its own planet; Aurora Light has soft pastel buttons) and a modern colour icon set
+- a compact sidebar with counts that collapses to icons only
+- a progress bar in every row, coloured by file type, and All / Downloading / Completed tabs
+- a details pane with the selected download's full progress; close it for a wide stats strip and the full toolbar
+- **Galaxy Explorer** follows its own concept layout (open download tabs in the pane) and adds the **Cosmic Dashboard**: active downloads orbiting the Draco star, queues, categories, speed trend, real-time alerts and telemetry (planet button in the header)
 
 <div align="center">
 <img src="docs/screenshots/dashboard-aurora-light.jpg" alt="Draco with the Aurora Light dashboard theme" width="760">
@@ -131,6 +132,10 @@ Switch instantly under **View → Theme** or with the palette button.
 In these themes, each file type gets its own progress look: *Galaxy Explorer*, *Starlight Forest* (documents), *Aurora Music*, *Cinematic Horizon* (video) and *Nebula Archive* (compressed). Choose the look per category in **Options → Save To → Categories → Progress look**.
 
 To see progress inside Draco or in separate windows, use **Options → General → Show download progress**.
+
+<div align="center">
+<img src="docs/screenshots/cosmic-dashboard.jpg" alt="Cosmic Dashboard in Galaxy Explorer" width="900">
+</div>
 
 <div align="center">
 <img src="docs/screenshots/progress-looks.jpg" alt="Progress windows: Galaxy Explorer, Starlight Forest, Aurora Music, Cinematic Horizon, Nebula Archive" width="900">

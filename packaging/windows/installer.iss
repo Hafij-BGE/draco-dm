@@ -3,7 +3,7 @@
 ; Installs per user (no admin prompt) to %LOCALAPPDATA%\Programs\Draco.
 
 #ifndef AppVersion
-  #define AppVersion "1.6.1"
+  #define AppVersion "1.7.0"
 #endif
 
 [Setup]

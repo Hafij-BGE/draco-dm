@@ -189,7 +189,130 @@ def progress_backgrounds():
     W, H = 1600, 1000
 
 
+def star_textures():
+    """Transparent star overlays for the toolbar tiles and cards (light and dark variants)."""
+    r = np.random.default_rng(21)
+
+    def make(name, w, h, count, color, max_alpha, glints):
+        a = np.zeros((h, w), float)
+        ys, xs = r.integers(0, h, count), r.integers(0, w, count)
+        a[ys, xs] = r.random(count) ** 2 * max_alpha
+        big = Image.fromarray(a.astype("uint8")).filter(ImageFilter.GaussianBlur(0.35))
+        a = np.maximum(a, np.asarray(big, float) * 1.6)
+        for _ in range(glints):                      # a few brighter stars with a soft glow
+            x, y = int(r.integers(4, w - 4)), int(r.integers(4, h - 4))
+            yy, xx = np.ogrid[:h, :w]
+            a = np.maximum(a, np.exp(-((xx - x) ** 2 + (yy - y) ** 2) / 2.5) * 230)
+        rgba = np.zeros((h, w, 4), "uint8")
+        rgba[..., :3] = color
+        rgba[..., 3] = np.clip(a, 0, 255).astype("uint8")
+        OUT.mkdir(parents=True, exist_ok=True)
+        Image.fromarray(rgba, "RGBA").save(OUT / name, optimize=True)
+        print("wrote", OUT / name)
+
+    # shown at real pixel size (repeated), so stars stay crisp inside small buttons
+    make("tile-stars.png", 96, 96, 70, (240, 244, 255), 255, 3)
+    make("tile-stars-dark.png", 96, 96, 60, (90, 80, 200), 200, 2)
+    make("card-stars.png", 600, 600, 260, (220, 228, 255), 150, 5)
+
+
+def planets():
+    """Small planets for the toolbar buttons (one per button), lit from the top left."""
+    N = 160
+    r = np.random.default_rng(5)
+    yy, xx = np.mgrid[:N, :N].astype(float)
+
+    def sphere(cx, cy, rad):
+        dx, dy = (xx - cx) / rad, (yy - cy) / rad
+        d2 = dx * dx + dy * dy
+        inside = d2 <= 1
+        z = np.sqrt(np.clip(1 - d2, 0, 1))
+        light = np.clip(-0.55 * dx - 0.6 * dy + 0.58 * z, 0, 1) * 0.85 + 0.15
+        return inside, dx, dy, z, light
+
+    def noise(scale, seed):
+        g = np.random.default_rng(seed)
+        small = Image.fromarray((g.random((N // scale, N // scale)) * 255).astype("uint8"))
+        return np.asarray(small.resize((N, N), Image.BICUBIC).filter(ImageFilter.GaussianBlur(scale / 2)), float) / 255
+
+    def finish(name, rgb, alpha):
+        img = np.zeros((N, N, 4), "uint8")
+        img[..., :3] = np.clip(rgb, 0, 255)
+        img[..., 3] = np.clip(alpha * 255, 0, 255)
+        im = Image.fromarray(img, "RGBA").filter(ImageFilter.GaussianBlur(0.6))
+        im.save(OUT / name, optimize=True)
+        print("wrote", OUT / name)
+
+    def body(name, base, cx=80, cy=80, rad=70, texture=None, rings=None, glow=None):
+        inside, dx, dy, z, light = sphere(cx, cy, rad)
+        rgb = np.zeros((N, N, 3)) + np.array(base, float)
+        if texture is not None:
+            rgb = texture(rgb, dx, dy, z)
+        rgb = rgb * light[..., None]
+        edge = np.clip((1 - np.sqrt(dx * dx + dy * dy)) * rad / 1.5, 0, 1)
+        alpha = inside * edge
+        if glow:                                     # thin atmosphere
+            d = np.sqrt(dx * dx + dy * dy)
+            halo = np.exp(-((d - 1.0) * rad / 3.5) ** 2) * (d > 0.95)
+            rgb = np.where(inside[..., None], rgb, np.array(glow, float))
+            alpha = np.maximum(alpha, halo * 0.7)
+        if rings:
+            rcol, tilt = rings
+            ex, ey = (xx - cx) / (rad * 1.75), (yy - cy) / (rad * 1.75 * tilt)
+            rr = np.sqrt(ex * ex + ey * ey)
+            band = ((rr > 0.62) & (rr < 0.98)) * (0.55 + 0.45 * np.sin(rr * 60) ** 2)
+            front = (yy > cy) | ~inside
+            ring_a = band * front * 0.9
+            rgb = np.where((ring_a > alpha)[..., None], np.array(rcol, float) * (0.6 + 0.4 * band[..., None]), rgb)
+            alpha = np.maximum(alpha, ring_a)
+        finish(name, rgb, alpha)
+
+    def earth(rgb, dx, dy, z):
+        n = noise(16, 3)
+        land = n > 0.55
+        rgb[land] = np.array((70, 150, 80), float) + (n[land, None] - 0.55) * 200 * np.array((0.6, 0.3, 0.1))
+        cloud = noise(10, 9) > 0.66
+        rgb[cloud] = (235, 240, 250)
+        return rgb
+
+    def bands(colors, freq, seed):
+        def t(rgb, dx, dy, z):
+            wob = noise(20, seed) * 0.25
+            k = (np.sin((dy + wob) * freq) + 1) / 2
+            c1, c2 = np.array(colors[0], float), np.array(colors[1], float)
+            return c1 + (c2 - c1) * k[..., None]
+        return t
+
+    def craters(rgb, dx, dy, z):
+        n = noise(8, 4)
+        return rgb * (0.75 + 0.35 * n[..., None])
+
+    def mars(rgb, dx, dy, z):
+        n = noise(12, 6)
+        rgb = rgb * (0.8 + 0.35 * n[..., None])
+        cap = dy < -0.82
+        rgb[cap] = (245, 240, 235)
+        return rgb
+
+    OUT.mkdir(parents=True, exist_ok=True)
+    body("planet-earth.png", (40, 100, 210), texture=earth, glow=(120, 180, 255))
+    body("planet-saturn.png", (220, 190, 130), rad=46, texture=bands([(230, 200, 140), (190, 150, 100)], 14, 2),
+         rings=((215, 195, 150), 0.32))
+    body("planet-mars.png", (200, 90, 50), texture=mars)
+    body("planet-jupiter.png", (210, 170, 130), texture=bands([(235, 210, 175), (175, 115, 75)], 22, 7))
+    body("planet-neptune.png", (50, 90, 230), texture=bands([(70, 120, 240), (40, 70, 200)], 9, 8),
+         glow=(110, 150, 255))
+    body("planet-moon.png", (190, 190, 200), texture=craters)
+    body("planet-venus.png", (235, 195, 120), texture=bands([(245, 215, 150), (215, 170, 100)], 6, 11))
+    body("planet-uranus.png", (120, 210, 220), rad=50, texture=bands([(140, 225, 230), (110, 195, 210)], 5, 12),
+         rings=((180, 230, 240), 0.95))
+    body("planet-ice.png", (190, 160, 240), texture=bands([(210, 185, 250), (150, 120, 220)], 10, 13),
+         glow=(200, 170, 255))
+
+
 if __name__ == "__main__":
     src = Path(sys.argv[1] if len(sys.argv) > 1 else ".")
     backgrounds(src)
     illustrations(src)
+    star_textures()
+    planets()
