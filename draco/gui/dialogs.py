@@ -51,7 +51,7 @@ class Dialog(Adw.Window):
 
 
 def _grid_row(grid, row, title, widget):
-    grid.attach(util.label(title, css=["dim-label"]), 0, row, 1, 1)
+    grid.attach(util.label(title, css=["dim-label"], ellipsize=False), 0, row, 1, 1)
     widget.set_hexpand(True)
     grid.attach(widget, 1, row, 1, 1)
 
@@ -126,10 +126,21 @@ class FileInfoDialog(Dialog):
         path_box.append(self.path)
         path_box.append(browse)
         _grid_row(g, 2, "Save As", path_box)
+        fixed = s.get("fixed_folder")
+        self.where = util.label("", xalign=0, wrap=True, css=["dim-label"])
+        g.attach(self.where, 1, 3, 1, 1)
+        self.always = Gtk.CheckButton(label="Always save downloads to this folder from now on",
+                                      active=bool(fixed) and Path(fixed).expanduser() == Path(item["save_dir"]))
+        self.always.set_tooltip_text("Every new download goes to this folder until you reset it in "
+                                     "Options → Save To → Reset to default")
+        g.attach(self.always, 1, 4, 1, 1)
         self.remember = Gtk.CheckButton(label="Remember this folder for the category")
-        g.attach(self.remember, 1, 3, 1, 1)
+        g.attach(self.remember, 1, 5, 1, 1)
+        self.always.connect("toggled", lambda *_: self._show_where())
+        self.path.connect("changed", lambda *_: self._show_where())
+        self._show_where()
         self.desc = Gtk.Entry(text=item.get("description", ""))
-        _grid_row(g, 4, "Description", self.desc)
+        _grid_row(g, 6, "Description", self.desc)
         size = fmt_size(item.get("size", -1))
         info = size
         if item.get("kind") == "ytdlp":
@@ -255,6 +266,15 @@ class FileInfoDialog(Dialog):
                                                     css=["error"]), self.subs_check)
         return False
 
+    def _show_where(self):
+        """Say plainly which folder the file goes to, so it can be checked before starting."""
+        folder = Path(self.path.get_text()).expanduser().parent
+        note = f"Will be saved in:  {folder}"
+        if self.always.get_active():
+            note += "\nAll new downloads will go to this folder until you reset it in Options → Save To."
+        self.where.set_text(note)
+        self.remember.set_sensitive(not self.always.get_active())
+
     def _on_cat(self, *_):
         cat = self.cats[self.cat.get_selected()]
         name = Path(self.path.get_text()).name
@@ -279,7 +299,13 @@ class FileInfoDialog(Dialog):
         it, s = self.item, self.app.settings
         p = Path(self.path.get_text()).expanduser()
         cat = self.cats[self.cat.get_selected()]
-        if self.remember.get_active():
+        if self.always.get_active():
+            s["fixed_folder"] = str(p.parent)
+            s.save()
+        elif s.get("fixed_folder") and Path(s["fixed_folder"]).expanduser() == p.parent:
+            s["fixed_folder"] = ""     # unticked for the fixed folder itself: back to the default folders
+            s.save()
+        if self.remember.get_active() and not self.always.get_active():
             for c in s["categories"]:
                 if c["name"] == cat:
                     c["folder"] = str(p.parent)

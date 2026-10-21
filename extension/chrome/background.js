@@ -174,6 +174,37 @@ async function isNewDownload(item) {
   return !started || Date.now() - started < 30000;
 }
 
+async function downloadState(id) {
+  try {
+    const [d] = await chrome.downloads.search({ id });
+    return d || null;
+  } catch (e) {
+    return null;
+  }
+}
+
+// Some browsers (Brave) refuse to pause a download in its first moments, while it is still
+// being checked; the download then carries on next to Draco's. Keep trying for a few seconds.
+async function pauseBrowserDownload(id) {
+  for (let i = 0; i < 20; i++) {
+    try { await chrome.downloads.pause(id); } catch (e) { /* not ready yet */ }
+    const d = await downloadState(id);
+    if (!d || d.paused || d.state !== "in_progress") return;
+    await new Promise((r) => setTimeout(r, 150));
+  }
+}
+
+// Draco took the download: remove the browser's copy. Cancel it; if it already finished while
+// Draco was checking the link (small files), delete the finished file so it isn't saved twice.
+async function dropBrowserDownload(id) {
+  try { await chrome.downloads.cancel(id); } catch (e) { /* already finished or gone */ }
+  const d = await downloadState(id);
+  if (d && d.state === "complete" && d.exists !== false) {
+    try { await chrome.downloads.removeFile(id); } catch (e) { /* ignore */ }
+  }
+  try { await chrome.downloads.erase({ id }); } catch (e) { /* ignore */ }
+}
+
 chrome.downloads.onCreated.addListener(async (item) => {
   if (!(await isNewDownload(item)) || !shouldCapture(item)) return;
   const url = item.finalUrl || item.url;
@@ -183,14 +214,13 @@ chrome.downloads.onCreated.addListener(async (item) => {
   recent.set(url, now);
   // Pause (not cancel) first: some downloads (POST forms, one-time links such as Google Drive)
   // can't be fetched again. Draco checks the link; only if it can download it do we cancel ours.
-  try { await chrome.downloads.pause(item.id); } catch (e) { /* not started yet */ }
+  await pauseBrowserDownload(item.id);
   const reply = await sendToDraco(url, {
     referer: item.referrer || "", filename: (item.filename || "").split(/[\\/]/).pop(),
     size: item.totalBytes > 0 ? item.totalBytes : undefined, silent: state.quick, verify: true,
   });
   if (reply.ok) {
-    try { await chrome.downloads.cancel(item.id); } catch (e) { /* already gone */ }
-    try { await chrome.downloads.erase({ id: item.id }); } catch (e) { /* ignore */ }
+    await dropBrowserDownload(item.id);
   } else {
     // Draco can't take it (not running, or the server refuses a second request): browser continues.
     try { await chrome.downloads.resume(item.id); } catch (e) { /* ignore */ }

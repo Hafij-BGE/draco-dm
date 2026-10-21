@@ -64,6 +64,7 @@ The Windows installer, AppImage and Flatpak include yt-dlp and ffmpeg. The `.deb
 | **Queues and scheduler** | Several queues, each with its own number of simultaneous downloads. Start and stop times, weekdays, run once, retry failed files. When a queue finishes, Draco can exit, suspend, hibernate or shut down, with a 60-second cancel window. |
 | **Speed limiter** | A global limit in the status bar, plus a per-download limit. |
 | **Categories** | Compressed, Documents, Music, Programs, Video and General, each with its own folder and file types (editable in Options). |
+| **Your folder, every time** | The File Info dialog shows where the file will be saved. Tick *Always save downloads to this folder* and every download goes there until you reset it in **Options → Save To**. |
 
 ### Capture and tools
 

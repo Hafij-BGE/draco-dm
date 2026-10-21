@@ -78,6 +78,7 @@ DEFAULT_SETTINGS = {
     "user_agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Safari/537.36",
     "proxy": "",                     # e.g. http://127.0.0.1:8080 or socks unsupported
     "download_dir": "",              # empty = XDG download dir
+    "fixed_folder": "",              # set = every download goes here (no category folders) until reset
     "use_category_folders": True,
     "temp_suffix": ".dracopart",
     "show_progress_dialog": True,
@@ -159,6 +160,8 @@ class Settings:
         return "General"
 
     def folder_for(self, category):
+        if self.get("fixed_folder"):
+            return Path(self["fixed_folder"]).expanduser()
         base = self.base_dir()
         if not self["use_category_folders"] or category == "General":
             return base

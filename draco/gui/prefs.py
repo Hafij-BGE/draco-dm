@@ -1,10 +1,12 @@
 """Preferences."""
 
+from pathlib import Path
+
 import gi
 
 gi.require_version("Gtk", "4.0")
 gi.require_version("Adw", "1")
-from gi.repository import Adw, Gtk  # noqa: E402
+from gi.repository import Adw, Gio, GLib, Gtk  # noqa: E402
 
 
 def _spin(title, lo, hi, step, value, subtitle=""):
@@ -89,6 +91,19 @@ class PrefsDialog(Adw.PreferencesDialog):
         self.dup.set_selected(1 if s["duplicate_action"] == "overwrite" else 0)
         g.add(self.dup)
         p.add(g)
+        g = Adw.PreferencesGroup(title="Always save to one folder",
+                                 description="When set, every download goes to this folder (category folders "
+                                             "are not used) until you reset it")
+        self.fixed_row = Adw.ActionRow(title="Folder for all downloads")
+        choose = Gtk.Button(label="Choose…", valign=Gtk.Align.CENTER)
+        choose.connect("clicked", self._choose_fixed)
+        self.fixed_reset = Gtk.Button(label="Reset to default", valign=Gtk.Align.CENTER)
+        self.fixed_reset.connect("clicked", lambda *_: self._set_fixed(""))
+        self.fixed_row.add_suffix(choose)
+        self.fixed_row.add_suffix(self.fixed_reset)
+        g.add(self.fixed_row)
+        self._show_fixed()
+        p.add(g)
         g = Adw.PreferencesGroup(title="Categories", description="Extensions are separated by spaces")
         self.cat_rows = []
         for cat in s["categories"]:
@@ -121,6 +136,31 @@ class PrefsDialog(Adw.PreferencesDialog):
         self.add(p)
 
         self.connect("closed", lambda *_: self._save())
+
+    def _show_fixed(self):
+        fixed = self.app.settings.get("fixed_folder")
+        self.fixed_row.set_subtitle(fixed or "Off: downloads go to the folders above")
+        self.fixed_reset.set_sensitive(bool(fixed))
+
+    def _set_fixed(self, folder):
+        self.app.settings["fixed_folder"] = folder
+        self.app.settings.save()
+        self._show_fixed()
+
+    def _choose_fixed(self, *_):
+        dlg = Gtk.FileDialog(title="Folder for all downloads")
+        cur = self.app.settings.get("fixed_folder") or str(self.app.settings.base_dir())
+        if Path(cur).expanduser().is_dir():
+            dlg.set_initial_folder(Gio.File.new_for_path(str(Path(cur).expanduser())))
+
+        def done(d, res):
+            try:
+                f = d.select_folder_finish(res)
+            except GLib.Error:
+                return
+            self._set_fixed(f.get_path())
+
+        dlg.select_folder(self, None, done)
 
     def _switch(self, group, key, title):
         r = Adw.SwitchRow(title=title, active=bool(self.app.settings[key]))
