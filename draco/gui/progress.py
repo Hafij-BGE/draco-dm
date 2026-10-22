@@ -121,32 +121,32 @@ class ProgressView(Gtk.Box):
         self.light = self.pstyle == "galaxy-light"
         nb = Gtk.Notebook()
         nb.add_css_class("gx-tabs")
-        nb.append_page(self._galaxy_status(), self._icon_label("draco-down-symbolic", "Download status", 18))
-        nb.append_page(self._limiter_page(), self._icon_label("draco-speed-symbolic", "Speed Limiter", 18))
-        nb.append_page(self._options_page(), self._icon_label("emblem-system-symbolic", "Options on completion", 18))
+        nb.append_page(self._galaxy_status(), self._icon_label("draco-down-symbolic", "Download status", 14))
+        nb.append_page(self._limiter_page(), self._icon_label("draco-speed-symbolic", "Speed Limiter", 14))
+        nb.append_page(self._options_page(), self._icon_label("emblem-system-symbolic", "Options on completion", 14))
         if self.light:
             self._preview_page = Gtk.Box()
-            nb.append_page(self._preview_page, self._icon_label("media-playback-start-symbolic", "Preview", 18))
+            nb.append_page(self._preview_page, self._icon_label("media-playback-start-symbolic", "Preview", 14))
             nb.connect("switch-page", lambda nb, page, n: n == 3 and self._fill_preview())
         self.append(nb)
 
-        btns = Gtk.Box(spacing=12, margin_top=4)
-        self.details_btn = Gtk.Button(width_request=200)
+        btns = Gtk.Box(spacing=8, margin_top=2)
+        self.details_btn = Gtk.Button(width_request=140)
         self.details_btn.add_css_class("gx-btn")
         self._details_child = self._icon_label("pan-down-symbolic", "Show details")
         self.details_btn.set_child(self._details_child)
         self.details_btn.connect("clicked", self._toggle_details)
         btns.append(self.details_btn)
         btns.append(Gtk.Box(hexpand=True))
-        self.pause_btn = Gtk.Button(width_request=150)
+        self.pause_btn = Gtk.Button(width_request=110)
         self.pause_btn.add_css_class("gx-pause")
-        self._pause_child = self._icon_label("media-playback-pause-symbolic", "Pause", 18)
+        self._pause_child = self._icon_label("media-playback-pause-symbolic", "Pause", 14)
         self.pause_btn.set_child(self._pause_child)
         self.pause_btn.connect("clicked", self._toggle_pause)
         btns.append(self.pause_btn)
-        cancel = Gtk.Button(width_request=150)
+        cancel = Gtk.Button(width_request=110)
         cancel.add_css_class("gx-cancel" if self.light else "gx-btn")
-        cc = self._icon_label("draco-x-symbolic", "Cancel", 18)
+        cc = self._icon_label("draco-x-symbolic", "Cancel", 14)
         cc.img.add_css_class("gx-red")
         cancel.set_child(cc)
         cancel.connect("clicked", self._cancel)
@@ -154,7 +154,7 @@ class ProgressView(Gtk.Box):
         self.append(btns)
 
         self.details = Gtk.Revealer(transition_type=Gtk.RevealerTransitionType.SLIDE_DOWN)
-        dbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10, margin_top=4)
+        dbox = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6, margin_top=2)
         dbox.add_css_class("gx-card")
         dbox.add_css_class("gx-pad")
         top = Gtk.Box(spacing=8)
@@ -173,16 +173,16 @@ class ProgressView(Gtk.Box):
             top.append(self.conn_drop)
         dbox.append(top)
         self.map = SegmentMap(self.item, self.pstyle)
-        self.map.set_size_request(-1, 30)
+        self.map.set_size_request(-1, 18)
         self.map.add_css_class("gx-seg")
         dbox.append(self.map)
         table = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         table.add_css_class("gx-table")
         head = Gtk.Box()
         head.add_css_class("gx-head")
-        cols = (("N.", 70, 0.5), ("Downloaded", 160, 0.5), ("Info", -1, 0))
+        cols = (("N.", 40, 0.5), ("Downloaded", 110, 0.5), ("Info", -1, 0))
         if self.light:
-            cols += (("Progress", 226, 0), ("Speed", 120, 0))
+            cols += (("Progress", 150, 0), ("Speed", 85, 0))
         for text, w, xa in cols:
             lb = util.label(text, xalign=xa)
             lb.add_css_class("gx-cell")
@@ -195,7 +195,7 @@ class ProgressView(Gtk.Box):
         self.gx_rows_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         table.append(self.gx_rows_box)
         self.gx_rows = []
-        dbox.append(Gtk.ScrolledWindow(child=table, min_content_height=150, max_content_height=300,
+        dbox.append(Gtk.ScrolledWindow(child=table, min_content_height=110, max_content_height=190,
                                        propagate_natural_height=True))
         self.details.set_child(dbox)
         self.append(self.details)
@@ -203,12 +203,12 @@ class ProgressView(Gtk.Box):
 
     def _galaxy_status(self):
         from gi.repository import Pango
-        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6, margin_top=10)
+        box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=4, margin_top=6)
         box.add_css_class("gx-card")
         box.add_css_class("gx-art")
-        urlrow = Gtk.Box(spacing=14)
+        urlrow = Gtk.Box(spacing=10)
         urlrow.add_css_class("gx-url")
-        urlrow.append(Gtk.Image(icon_name="draco-chain-symbolic", pixel_size=20))
+        urlrow.append(Gtk.Image(icon_name="draco-chain-symbolic", pixel_size=15))
         self.url_lbl = util.label(self.item["url"])
         self.url_lbl.set_ellipsize(Pango.EllipsizeMode.MIDDLE)
         self.url_lbl.set_hexpand(True)
@@ -219,23 +219,23 @@ class ProgressView(Gtk.Box):
             copy.connect("clicked", lambda *_: self.get_clipboard().set(self.item["url"]))
             urlrow.append(copy)
         box.append(urlrow)
-        inner = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6, margin_start=22, margin_end=22,
-                        margin_top=8, margin_bottom=16)
+        inner = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=3, margin_start=14, margin_end=14,
+                        margin_top=4, margin_bottom=10)
         self.status_lbl = util.label("", css=["gx-state"])
         inner.append(self.status_lbl)
-        grid = Gtk.Grid(column_spacing=0, row_spacing=4)
+        grid = Gtk.Grid(column_spacing=0, row_spacing=1)
         self.fields = {}
         for row, (key, title) in enumerate([("size", "File size"), ("done", "Downloaded"),
                                             ("rate", "Transfer rate"), ("eta", "Time left"),
                                             ("resume", "Resume capability")]):
             k = util.label(title, css=["gx-key"], ellipsize=False)
-            k.set_size_request(250, -1)
+            k.set_size_request(170, -1)
             grid.attach(k, 0, row, 1, 1)
             v = util.label(css=["gx-val"] + (["yes"] if key == "resume" else []), ellipsize=False)
             grid.attach(v, 1, row, 1, 1)
             self.fields[key] = v
         inner.append(grid)
-        bar_row = Gtk.Box(spacing=14, margin_top=14)
+        bar_row = Gtk.Box(spacing=10, margin_top=8)
         self.bar = Gtk.ProgressBar(hexpand=True, valign=Gtk.Align.CENTER)
         self.bar.add_css_class("gx-bar")
         bar_row.append(self.bar)
@@ -265,24 +265,24 @@ class ProgressView(Gtk.Box):
             if n % 2 == 0:
                 r.add_css_class("odd")
             cells = [util.label(str(n), xalign=0.5), util.label(xalign=0.5), util.label()]
-            cells[0].set_size_request(70, -1)
-            cells[1].set_size_request(160, -1)
+            cells[0].set_size_request(40, -1)
+            cells[1].set_size_request(110, -1)
             cells[2].set_hexpand(True)
             for c in cells:
                 c.add_css_class("gx-cell")
                 r.append(c)
             if self.light:
-                wrap = Gtk.Box(width_request=226)
-                bar = Gtk.ProgressBar(valign=Gtk.Align.CENTER, hexpand=True, margin_start=12, margin_end=20)
+                wrap = Gtk.Box(width_request=150)
+                bar = Gtk.ProgressBar(valign=Gtk.Align.CENTER, hexpand=True, margin_start=8, margin_end=12)
                 bar.add_css_class("gx-thin")
                 wrap.append(bar)
                 r.append(wrap)
                 sp = util.label()
                 sp.add_css_class("gx-cell")
-                sp.set_size_request(120, -1)
+                sp.set_size_request(85, -1)
                 r.append(sp)
             else:
-                bar = Gtk.ProgressBar(valign=Gtk.Align.CENTER, width_request=200, margin_end=26)
+                bar = Gtk.ProgressBar(valign=Gtk.Align.CENTER, width_request=140, margin_end=16)
                 bar.add_css_class("gx-thin")
                 r.append(bar)
                 sp = None
@@ -646,10 +646,10 @@ class ProgressWindow(Adw.Window):
         if self.galaxy:
             self.add_css_class(f"pw-{pstyle}")
             self.add_css_class("gx-window")
-            self.set_default_size(740, -1)
+            self.set_default_size(560, -1)
             handle = Gtk.WindowHandle()
-            head = Gtk.Box(spacing=18, margin_start=22, margin_end=14, margin_top=14, margin_bottom=6)
-            head.append(Gtk.Image(gicon=style.app_icon(), pixel_size=58))
+            head = Gtk.Box(spacing=10, margin_start=14, margin_end=10, margin_top=8, margin_bottom=2)
+            head.append(Gtk.Image(gicon=style.app_icon(), pixel_size=38))
             self.pct_title = util.label("", css=["gx-title-pct"], ellipsize=False)
             head.append(self.pct_title)
             self.title_lbl = util.label("", css=["gx-title"])

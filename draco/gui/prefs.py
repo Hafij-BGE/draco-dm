@@ -117,6 +117,13 @@ class PrefsDialog(Adw.PreferencesDialog):
         g.add(self.fixed_row)
         self._show_fixed()
         p.add(g)
+        g = Adw.PreferencesGroup(title="Temp downloading",
+                                 description="Starts in a temp folder while the save window is open; moved on "
+                                             "Start Download, deleted on Cancel.")
+        self._switch(g, "early_download", "Start while choosing the folder")
+        self._entry(g, "temp_dir", f"Temp folder (empty = {s.base_dir() / 'temp'})")
+        self._entry(g, "early_skip_exts", "Not for these file types (e.g. iso zip)")
+        p.add(g)
         g = Adw.PreferencesGroup(title="Categories", description="Extensions are separated by spaces")
         self.cat_rows = []
 

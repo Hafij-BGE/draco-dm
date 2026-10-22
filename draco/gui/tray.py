@@ -191,7 +191,9 @@ class Tray:
     def _run(self, item_id):
         for i, _label, cb in self.items:
             if i == item_id and cb:
-                GLib.idle_add(lambda: (cb(), False)[1])
+                # bind this item's callback now: a late-bound `cb` ran the last item (Quit) instead
+                GLib.idle_add(lambda cb=cb: (cb(), False)[1])
+                return
 
     def _call(self, conn, sender, path, iface, method, params, inv):
         if method in ("Activate", "SecondaryActivate"):

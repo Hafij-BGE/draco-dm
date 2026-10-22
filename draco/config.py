@@ -79,6 +79,10 @@ DEFAULT_SETTINGS = {
     "proxy": "",                     # e.g. http://127.0.0.1:8080 or socks unsupported
     "download_dir": "",              # empty = XDG download dir
     "fixed_folder": "",              # set = every download goes here (no category folders) until reset
+    "last_save_dir": "",             # folder of the last download confirmed in the File Info window
+    "early_download": True,          # start downloading into temp_dir while the File Info window is open
+    "temp_dir": "",                  # empty = <download folder>/temp
+    "early_skip_exts": "",           # file types that never start early, e.g. "iso zip"
     "use_category_folders": True,
     "temp_suffix": ".dracopart",
     "show_progress_dialog": True,
@@ -159,6 +163,11 @@ class Settings:
     def base_dir(self):
         d = self["download_dir"]
         return Path(d).expanduser() if d else downloads_root()
+
+    def temp_dir(self):
+        """Where a download starts while you are still choosing its folder."""
+        d = self.get("temp_dir")
+        return Path(d).expanduser() if d else self.base_dir() / "temp"
 
     def category_for(self, filename):
         ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""

@@ -602,63 +602,65 @@ window.pw-{key} notebook > header tab:checked {{ background: linear-gradient(135
 window.pw-{key} .pw-card {{ background: {panel}; border: 1px solid {border}; border-radius: 14px; }}
 window.pw-{key}.gx-window {{ background-color: {base}; background-image: url("{gx_bg_url}");
   background-size: cover; box-shadow: inset 0 0 0 1px alpha({a2}, 0.55), 0 0 18px alpha({a2}, 0.25); }}
-window.pw-{key} .gx-title-pct {{ font-size: 17pt; font-weight: 800; color: {a2}; }}
-window.pw-{key} .gx-title {{ font-size: 17pt; font-weight: 800; color: {fg}; text-shadow: {title_glow}; }}
+window.pw-{key} .gx-title-pct {{ font-size: 13pt; font-weight: 800; color: {a2}; }}
+window.pw-{key} .gx-title {{ font-size: 13pt; font-weight: 800; color: {fg}; text-shadow: {title_glow}; }}
 window.pw-{key} notebook.gx-tabs, window.pw-{key} notebook.gx-tabs > stack {{ background: none; }}
 window.pw-{key} notebook.gx-tabs > header {{ background: none; border: none; box-shadow: none; }}
 window.pw-{key} notebook.gx-tabs > header tab {{ background: {tile}; border: 1px solid {border};
-  border-radius: 12px 12px 0 0; padding: 10px 22px; margin: 0 8px 0 0; min-height: 30px; color: {fg}; }}
+  border-radius: 10px 10px 0 0; padding: 6px 12px; margin: 0 5px 0 0; min-height: 22px; color: {fg}; }}
 window.pw-{key} notebook.gx-tabs > header tab:checked {{ border-color: alpha({a2}, 0.7);
   background: linear-gradient(180deg, #2f5bea, #1d3fbf); box-shadow: inset 0 -3px 0 {a2}, 0 0 12px alpha({a2}, 0.35); }}
-window.pw-{key} notebook.gx-tabs > header tab label {{ font-size: 12pt; }}
+window.pw-{key} notebook.gx-tabs > header tab label {{ font-size: 10pt; }}
 window.pw-{key} notebook.gx-tabs > header tab:checked label {{ color: #ffffff; }}
 window.pw-{key} notebook.gx-tabs > header tab:checked image {{ color: #ffffff; }}
-window.pw-{key} .gx-card {{ background-color: {panel}; border: 1px solid {border}; border-radius: 14px; }}
+window.pw-{key} .gx-card {{ background-color: {panel}; border: 1px solid {border}; border-radius: 12px; }}
 window.pw-{key} .gx-card.gx-art {{ background-image: url("{art_url}"); background-repeat: no-repeat;
-  background-position: 100% 42%; background-size: auto 170px; }}
-window.pw-{key} .gx-pad {{ padding: 14px; }}
-window.pw-{key} .gx-url {{ background: {tile}; border-bottom: 1px solid {border}; border-radius: 14px 14px 0 0;
-  padding: 12px 22px; }}
-window.pw-{key} .gx-url label {{ font-size: 12pt; }}
-window.pw-{key} .gx-state {{ font-size: 18pt; font-weight: 700; color: {a2}; }}
-window.pw-{key} .gx-key {{ font-size: 12.5pt; color: {dim}; }}
-window.pw-{key} .gx-val {{ font-size: 12.5pt; color: {fg}; }}
-window.pw-{key} .gx-pct {{ font-size: 13pt; color: {a2}; }}
-window.pw-{key} progressbar.gx-bar > trough {{ min-height: 26px; border-radius: 13px; background: {seg_bg};
+  background-position: 100% 42%; background-size: auto 128px; }}
+window.pw-{key} .gx-pad {{ padding: 10px; }}
+window.pw-{key} .gx-url {{ background: {tile}; border-bottom: 1px solid {border}; border-radius: 12px 12px 0 0;
+  padding: 7px 14px; }}
+window.pw-{key} .gx-url label {{ font-size: 9.5pt; }}
+window.pw-{key} .gx-state {{ font-size: 14pt; font-weight: 700; color: {a2}; }}
+window.pw-{key} .gx-key {{ font-size: 10pt; color: {dim}; }}
+window.pw-{key} .gx-val {{ font-size: 10pt; color: {fg}; }}
+window.pw-{key} .gx-pct {{ font-size: 11pt; color: {a2}; }}
+window.pw-{key} progressbar.gx-bar > trough {{ min-height: 16px; border-radius: 8px; background: {seg_bg};
   border: 1px solid {border}; }}
-window.pw-{key} progressbar.gx-bar > trough > progress {{ min-height: 26px; border-radius: 13px; border: none;
+window.pw-{key} progressbar.gx-bar > trough > progress {{ min-height: 16px; border-radius: 8px; border: none;
   background: linear-gradient(90deg, {a1}, {a2}); }}
-window.pw-{key} button.gx-btn {{ min-height: 52px; border-radius: 12px; background: {tile}; border: 1px solid {border};
+window.pw-{key} button.gx-btn {{ min-height: 36px; border-radius: 10px; background: {tile}; border: 1px solid {border};
   box-shadow: none; }}
-window.pw-{key} button.gx-btn label, window.pw-{key} button.gx-pause label {{ font-size: 13pt; }}
-window.pw-{key} button.gx-pause {{ min-height: 52px; border-radius: 12px; border: 1px solid {a2}; box-shadow: none;
+window.pw-{key} button.gx-btn label, window.pw-{key} button.gx-pause label {{ font-size: 10.5pt; }}
+window.pw-{key} button.gx-pause {{ min-height: 36px; border-radius: 10px; border: 1px solid {a2}; box-shadow: none;
   background: linear-gradient(180deg, {a1}, shade({a1}, 0.8)); }}
 window.pw-{key} button.gx-pause label, window.pw-{key} button.gx-pause image {{ color: #ffffff; }}
 window.pw-{key} .gx-red {{ color: #f43f5e; }}
 window.pw-{key} .gx-table {{ border: 1px solid {border}; border-radius: 10px; }}
-window.pw-{key} .gx-head {{ background: {tile}; padding: 8px 0; border-radius: 10px 10px 0 0; }}
+window.pw-{key} .gx-head {{ background: {tile}; padding: 4px 0; border-radius: 10px 10px 0 0; }}
 window.pw-{key} .gx-head label {{ font-weight: 600; }}
-window.pw-{key} .gx-row {{ padding: 5px 0; }}
+window.pw-{key} .gx-row {{ padding: 1px 0; }}
 window.pw-{key} .gx-row.odd {{ background: alpha({fg}, 0.045); }}
-window.pw-{key} .gx-cell {{ font-size: 12pt; }}
-window.pw-{key} progressbar.gx-thin > trough {{ min-height: 10px; border-radius: 5px; background: {seg_bg}; border: none; }}
-window.pw-{key} progressbar.gx-thin > trough > progress {{ min-height: 10px; border-radius: 5px; border: none;
+window.pw-{key} .gx-cell {{ font-size: 9.5pt; }}
+window.pw-{key} progressbar.gx-thin > trough {{ min-height: 6px; border-radius: 3px; background: {seg_bg}; border: none; }}
+window.pw-{key} progressbar.gx-thin > trough > progress {{ min-height: 6px; border-radius: 3px; border: none;
   background: linear-gradient(90deg, {a2}, {a1}); }}
 window.pw-{key} .gx-seg {{ border-radius: 6px; }}
-window.pw-{key} windowcontrols button {{ background: none; border: none; min-width: 36px; min-height: 36px; }}
+window.pw-{key} windowcontrols button {{ background: none; border: none; min-width: 26px; min-height: 26px; }}
+window.pw-galaxy windowcontrols {{ background: alpha(#0b1030, 0.6); border-color: alpha(#ffffff, 0.14); }}
+window.pw-galaxy windowcontrols button image {{ color: #e8ecff; }}
 window.pw-galaxy-light .gx-state {{ color: {fg}; font-weight: 800; }}
 window.pw-galaxy-light .gx-val.yes {{ color: #16a34a; }}
-window.pw-galaxy-light .gx-dtitle {{ font-size: 12pt; color: {fg}; }}
+window.pw-galaxy-light .gx-dtitle {{ font-size: 10pt; color: {fg}; }}
 window.pw-galaxy-light notebook.gx-tabs > header tab:checked {{
   background: linear-gradient(180deg, #3b8bff, #1f63f0); border-color: #3b82f6; box-shadow: 0 2px 10px alpha(#3b82f6, 0.35); }}
 window.pw-galaxy-light button.gx-pause {{ background: linear-gradient(180deg, #3b8bff, #1f63f0); border-color: #3b82f6;
   box-shadow: 0 3px 12px alpha(#3b82f6, 0.35); }}
-window.pw-galaxy-light button.gx-cancel {{ min-height: 52px; border-radius: 12px; background: #ffe5ea; border: none;
+window.pw-galaxy-light button.gx-cancel {{ min-height: 36px; border-radius: 10px; background: #ffe5ea; border: none;
   box-shadow: none; }}
-window.pw-galaxy-light button.gx-cancel label {{ color: #e11d48; font-size: 13pt; }}
-window.pw-galaxy-light .gx-head label {{ border-left: 1px solid {border}; padding-left: 14px; }}
+window.pw-galaxy-light button.gx-cancel label {{ color: #e11d48; font-size: 10.5pt; }}
+window.pw-galaxy-light .gx-head label {{ border-left: 1px solid {border}; padding-left: 8px; }}
 window.pw-galaxy-light .gx-head label:first-child {{ border-left: none; padding-left: 0; }}
-window.pw-galaxy-light .gx-card.gx-art {{ background-size: auto 172px; background-position: 100% 45%; }}
+window.pw-galaxy-light .gx-card.gx-art {{ background-size: auto 130px; background-position: 100% 45%; }}
 window.pw-galaxy-light progressbar.gx-bar > trough > progress {{ background: linear-gradient(90deg, #1f63f0, #22b8ff); }}
 window.pw-galaxy-light progressbar.gx-thin > trough > progress {{ background: linear-gradient(90deg, #1f63f0, #22b8ff); }}
 window.pw-galaxy-light .gx-pct {{ color: #1f63f0; font-weight: 700; }}

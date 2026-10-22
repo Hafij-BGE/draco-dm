@@ -151,7 +151,7 @@ class Manager:
     def _reserve_name(self, item, name):
         """Pick the final file name once the server told us its name (called from task threads)."""
         with self.lock:
-            if item.get("auto_category"):
+            if item.get("auto_category") and not item.get("early") and not item.get("move_to"):
                 item["category"] = self.settings.category_for(name)
                 item["save_dir"] = str(self.settings.folder_for(item["category"]))
             if self.settings["duplicate_action"] != "rename":
@@ -185,10 +185,73 @@ class Manager:
             self.tasks.pop(item["id"], None)
             if not ok and item.get("queue") and item["status"] == "error":
                 self._queue_skip.add(item["id"])
+        if ok and item.get("early"):
+            # done before the user picked a folder: it waits in the temp folder until they do
+            item["early_done"] = True
+            self.emit("changed", item)
+            self.pump_queues()
+            return
+        if ok and item.get("move_to"):
+            self._move_final(item)
         self.emit("finished", item)
         if ok and self.settings["antivirus_cmd"]:
             threading.Thread(target=self._scan, args=(item,), daemon=True).start()
         self.pump_queues()
+
+    # ---------------------------------------------------------- early downloads
+    # The File Info window starts the download at once in the temp folder; when the user confirms,
+    # the file goes to the folder they chose (now if it is already there, else when it finishes).
+    def _move_final(self, item):
+        dest = item.pop("move_to", None)
+        if not dest:
+            return
+        src = Path(item["save_dir"]) / item["filename"]
+        final = Path(dest["dir"]).expanduser() / (dest.get("name") or item["filename"])
+        if final == src:
+            return
+        try:
+            final.parent.mkdir(parents=True, exist_ok=True)
+            if final.exists() and self.settings["duplicate_action"] != "overwrite":
+                final = unique_path(final)
+            shutil.move(str(src), str(final))
+            item.update(save_dir=str(final.parent), filename=final.name)
+        except OSError as e:          # the file stays in the temp folder, and says why
+            item["error"] = f"Could not move it to {final.parent}: {e}"
+        self.dirty = True
+
+    def confirm_early(self, item_id, folder, name, start=True, queue=""):
+        """The user chose where an early download goes (Start Download / Download Later)."""
+        it = self.items.get(item_id)
+        if not it:
+            return
+        it["early"] = False
+        it["move_to"] = {"dir": str(folder), "name": name}
+        if it.pop("early_done", False):
+            def finish():
+                self._move_final(it)
+                self.emit("finished", it)
+            threading.Thread(target=finish, daemon=True).start()
+            return
+        if start:
+            if item_id not in self.tasks:
+                self.start(item_id)
+            self.emit("changed", it)
+            return
+        self.pause(item_id)
+        it["queue"] = queue or ""
+        if queue:
+            it["queue_pos"] = 1 + max([i.get("queue_pos", 0) for i in self.items.values()
+                                       if i.get("queue") == queue and i is not it] or [0])
+            if self.queue_running.get(queue):
+                self._queue_skip.discard(item_id)
+                self.pump_queues()
+        self.emit("changed", it)
+
+    def discard_early(self, item_id):
+        """The File Info window was closed without confirming: stop and delete what was fetched."""
+        it = self.items.get(item_id)
+        if it and it.get("early"):
+            self.remove([item_id], delete_files=True)
 
     def _scan(self, item):
         path = str(Path(item["save_dir"]) / item["filename"])

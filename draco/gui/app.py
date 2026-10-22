@@ -4,6 +4,7 @@ import os
 import subprocess
 import threading
 import urllib.parse
+from pathlib import Path
 
 import gi
 
@@ -393,8 +394,30 @@ class DracoApp(Adw.Application):
             if self.settings["show_progress_dialog"]:
                 self.show_progress(item)
         else:
+            if not err:
+                self._start_early(item)
             self._open_file_info(item, err)
         return False
+
+    def _start_early(self, item):
+        """Options → Start downloading while choosing the folder: fetch into the temp folder now;
+        the File Info window then only decides where the file ends up."""
+        ext = Path(item.get("filename") or "").suffix.lower().lstrip(".")
+        if (not self.settings.get("early_download", True) or item.get("kind", "http") != "http"
+                or item["id"] in self.manager.items
+                or (ext and ext in self.settings.get("early_skip_exts", "").lower().replace(".", " ").split())):
+            return
+        item["early"] = True
+        item["planned_dir"] = item["save_dir"]       # what the window suggests
+        item["save_dir"] = str(self.settings.temp_dir())
+        try:
+            Path(item["save_dir"]).mkdir(parents=True, exist_ok=True)
+        except OSError as e:
+            print("draco: temp folder:", e)
+            item["save_dir"] = item.pop("planned_dir")
+            item["early"] = False
+            return
+        self.manager.add(item, start=True)
 
     def _open_file_info(self, item, err=None):
         """At most one 'Download File Info' window per link: bring the existing one forward."""

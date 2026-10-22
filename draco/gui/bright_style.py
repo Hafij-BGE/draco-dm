@@ -164,9 +164,15 @@ button.bw-sq, menubutton.bw-sq > button {{
 button.bw-sq:hover, menubutton.bw-sq > button:hover {{ background: {surface}; }}
 button.bw-sq:checked {{ background: {accent_soft}; color: {accent}; border-color: {accent_line}; }}
 button.bw-flat, menubutton.bw-flat > button {{ background: none; border: none; box-shadow: none; color: {fg}; min-width: 30px; }}
-windowcontrols button {{ background: {sq_bg}; border: 1px solid {tile_border}; border-radius: 10px;
-  min-width: 34px; min-height: 34px; margin-left: 6px; color: {fg}; }}
-windowcontrols button image {{ color: {fg}; }}
+windowcontrols {{ background: {sq_bg}; border: 1px solid {tile_border}; border-radius: 999px; padding: 3px;
+  margin-left: 6px; box-shadow: 0 2px 8px rgba(20,30,70,0.12); }}
+windowcontrols button {{ background: none; border: none; box-shadow: none; border-radius: 999px; padding: 0;
+  min-width: 28px; min-height: 28px; margin: 0 1px; color: {fg}; transition: background 120ms ease; }}
+windowcontrols button image {{ color: {fg}; -gtk-icon-size: 14px; }}
+windowcontrols button:hover {{ background: alpha(currentColor, 0.12); }}
+windowcontrols button:active {{ background: alpha(currentColor, 0.22); }}
+windowcontrols button.close:hover {{ background: #e5484d; }}
+windowcontrols button.close:hover image {{ color: #ffffff; }}
 
 button.bw-tile {{
   min-width: 70px; min-height: 62px; padding: 4px 10px; border-radius: 12px; color: {fg};

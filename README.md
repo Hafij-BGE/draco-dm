@@ -30,7 +30,8 @@ Multi-connection downloads, browser capture, YouTube and streaming video. No acc
 - 🌐 **Browser capture** for Chrome, Edge, Brave, Opera, Vivaldi and Firefox, including snap and Flatpak browsers. Cookies and referrer are passed along, so logged-in downloads work.
 - 🎬 **Video downloads** from YouTube and 1000+ sites, plus HLS/DASH streams, with the size of every quality shown before you choose.
 - 🗂️ **Queues, scheduler, categories, speed limiter**, site grabber, batch downloads and a clipboard watcher.
-- 🎨 **31 themes**: 17 picture themes (11 light, 6 dark) with an illustrated header and a progress window coloured by file type, plus 14 classic themes.
+- ⏱️ **Starts while you choose.** The download begins in a temp folder the moment the save window opens, and moves to your folder when you click Start Download.
+- 🎨 **31 themes**: 17 picture themes (11 light, 6 dark) with an illustrated header, a live planet that follows the selected download, and a progress window coloured by file type, plus 14 classic themes.
 - 🪶 **Lightweight and private.** Python 3 + GTK 4/libadwaita, standard library only. No telemetry, no ads.
 
 ## Install
@@ -64,7 +65,8 @@ The Windows installer, AppImage and Flatpak include yt-dlp and ffmpeg. The `.deb
 | **Queues and scheduler** | Several queues, each with its own number of simultaneous downloads. Start and stop times, weekdays, run once, retry failed files. When a queue finishes, Draco can exit, suspend, hibernate or shut down, with a 60-second cancel window. |
 | **Speed limiter** | A global limit in the status bar, plus a per-download limit. |
 | **Categories** | Compressed, Documents, Music, Programs, Video and General, each with its own folder and file types (editable in Options). |
-| **Your folder, every time** | The File Info dialog shows where the file will be saved. Tick *Always save downloads to this folder* and every download goes there until you reset it in **Options → Save To**. |
+| **Starts while you choose** | As soon as the File Info window opens, the file starts downloading into a `temp` folder, with a small progress bar in the window. **Start Download** moves it to the folder you chose; **Cancel** or closing the window deletes it. **Stop** or the **⋯** menu turns it off for this file, for a file type, or for good. Settings: **Options → Save To → Temp downloading**. Video pages wait for your quality choice. |
+| **Your folder, every time** | The File Info window shows where the file will be saved, and **Last saved to** puts it in the same folder as your previous download with one click. Tick *Always save downloads to this folder* and every download goes there until you click **Reset to default**, in the window or in **Options → Save To**. |
 
 ### Capture and tools
 
@@ -124,6 +126,12 @@ Switch instantly under **View → Theme** or with the palette button.
 
 Each one has an illustrated header that fades into the window, white or dark tool tiles, a coloured sidebar, a download list with a details pane (progress ring, speed graph) and a status bar with the speed limiter and drive space.
 
+**Live planet in the details pane.** Below the details, a planet follows the selected download through five stages with its real progress: *Initializing*, *Downloading*, *High speed* (from 70 %), *Finalizing* (from 95 % or while parts are joined) and *Completed*, with a calm look for paused and failed downloads. It fades into the white pane in light themes and into the dark pane in dark themes, runs on the GPU and stops when the window is hidden. **Options → General** turns it off or shows a still picture (**Reduce motion**).
+
+<div align="center">
+<img src="docs/screenshots/planet-stages.jpg" alt="The live planet: initializing, downloading, high speed and finalizing, light and dark" width="900">
+</div>
+
 <div align="center">
 <img src="docs/screenshots/themes.jpg" alt="The picture themes" width="900">
 </div>
@@ -134,7 +142,7 @@ In these themes every download gets its own **progress window coloured by file t
 <img src="docs/screenshots/progress-windows.jpg" alt="Progress windows by file type" width="900">
 </div>
 
-Prefer one look for all downloads? Choose **Options → General → Progress window style → Classic** for the galaxy window: dark in dark themes, light in light themes.
+Prefer one look for all downloads? Choose **Options → General → Progress window style → Classic** for the compact galaxy window: dark in dark themes, light in light themes.
 
 <div align="center">
 <img src="docs/screenshots/progress-classic.jpg" alt="Classic progress window, dark and light" width="900">
@@ -146,7 +154,7 @@ Prefer one look for all downloads? Choose **Options → General → Progress win
 <img src="docs/screenshots/main-classic.png" alt="Draco Classic theme" width="760">
 </div>
 
-To add your own theme, copy an entry in `BRIGHT` in `draco/gui/bright_style.py` (picture themes) or `THEMES` in `draco/gui/style.py` (classic themes). The theme pictures are made by `tools/make_theme_art.py`.
+To add your own theme, copy an entry in `BRIGHT` in `draco/gui/bright_style.py` (picture themes) or `THEMES` in `draco/gui/style.py` (classic themes). The theme pictures are made by `tools/make_theme_art.py`, the planet's by `tools/make_scene_art.py`.
 
 ## Command line
 

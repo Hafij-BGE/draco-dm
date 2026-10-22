@@ -121,8 +121,8 @@ class FileInfoDialog(Dialog):
         _grid_row(g, 1, "Category", self.cat)
 
         path_box = Gtk.Box(spacing=6)
-        self.path = Gtk.Entry(text=str(Path(item["save_dir"]) / (item["filename"] or "download")),
-                              hexpand=True)
+        planned = item.get("planned_dir") or item["save_dir"]     # an early download sits in the temp folder
+        self.path = Gtk.Entry(text=str(Path(planned) / (item["filename"] or "download")), hexpand=True)
         browse = Gtk.Button(icon_name="document-open-symbolic", tooltip_text="Choose location")
         browse.connect("clicked", self._browse)
         path_box.append(self.path)
@@ -130,12 +130,65 @@ class FileInfoDialog(Dialog):
         _grid_row(g, 2, "Save As", path_box)
         fixed = s.get("fixed_folder")
         self.where = util.label("", xalign=0, wrap=True, css=["dim-label"])
-        g.attach(self.where, 1, 3, 1, 1)
+        where_box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        where_box.append(self.where)
+        # one click back to the folder of the last download (shown when it isn't the folder above)
+        self.last_dir = s.get("last_save_dir") or ""
+        self.last = Gtk.Button(halign=Gtk.Align.START, tooltip_text="Save this download in the same folder as the last one")
+        self.last.add_css_class("flat")
+        last_box = Gtk.Box(spacing=6)
+        last_box.append(Gtk.Image(icon_name="document-open-recent-symbolic"))
+        self.last_label = util.label("", xalign=0, ellipsize=True)
+        last_box.append(self.last_label)
+        self.last.set_child(last_box)
+        self.last.connect("clicked", self._use_last)
+        where_box.append(self.last)
+        # Options → Start downloading while choosing the folder: show how far it already is
+        # temp downloading: progress, Stop, and "don't start early" (always / for this file type)
+        self.early_box = Gtk.Box(spacing=6, visible=False)
+        self.early_bar = Gtk.ProgressBar(valign=Gtk.Align.CENTER, width_request=80, hexpand=False)
+        self.early_box.append(self.early_bar)
+        self.early = util.label("", xalign=0, css=["accent"], ellipsize=False)
+        self.early.set_hexpand(True)
+        self.early_box.append(self.early)
+        stop = Gtk.Button(label="Stop", tooltip_text="Stop temp downloading for this file")
+        stop.add_css_class("flat")
+        stop.connect("clicked", lambda *_: self._stop_early())
+        self.early_box.append(stop)
+        ext = Path(item.get("filename") or "").suffix.lower().lstrip(".")
+        pop = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=2)
+        for label, never in (("Don't start early", "all"), (f"Not for .{ext} files", ext) if ext else (None, None)):
+            if label:
+                b = Gtk.Button(label=label)
+                b.add_css_class("flat")
+                b.connect("clicked", lambda _b, n=never: self._stop_early(n))
+                pop.append(b)
+        more = Gtk.MenuButton(icon_name="view-more-symbolic", tooltip_text="Temp downloading options",
+                              popover=Gtk.Popover(child=pop))
+        more.add_css_class("flat")
+        self.early_more = more
+        self.early_box.append(more)
+        where_box.append(self.early_box)
+        g.attach(where_box, 1, 3, 1, 1)
+        self._confirmed = False
+        self._early_timer = 0
+        if item.get("early"):
+            self._show_early()
+            self._early_timer = GLib.timeout_add(500, self._show_early)
+        self.connect("close-request", self._on_close)
         self.always = Gtk.CheckButton(label="Always save downloads to this folder from now on",
-                                      active=bool(fixed) and Path(fixed).expanduser() == Path(item["save_dir"]))
-        self.always.set_tooltip_text("Every new download goes to this folder until you reset it in "
-                                     "Options → Save To → Reset to default")
-        g.attach(self.always, 1, 4, 1, 1)
+                                      active=bool(fixed) and Path(fixed).expanduser() == Path(planned))
+        self.always.set_tooltip_text("Every new download goes to this folder until you reset it "
+                                     "(here or in Options → Save To)")
+        always_row = Gtk.Box(spacing=8)
+        always_row.append(self.always)
+        self.reset = Gtk.Button(label="Reset to default", valign=Gtk.Align.CENTER,
+                                tooltip_text="Stop using one folder for everything: downloads go to the "
+                                             "default (category) folders again")
+        self.reset.add_css_class("flat")
+        self.reset.connect("clicked", self._reset_folder)
+        always_row.append(self.reset)
+        g.attach(always_row, 1, 4, 1, 1)
         self.remember = Gtk.CheckButton(label="Remember this folder for the category")
         g.attach(self.remember, 1, 5, 1, 1)
         self.always.connect("toggled", lambda *_: self._show_where())
@@ -273,9 +326,81 @@ class FileInfoDialog(Dialog):
         folder = Path(self.path.get_text()).expanduser().parent
         note = f"Will be saved in:  {folder}"
         if self.always.get_active():
-            note += "\nAll new downloads will go to this folder until you reset it in Options → Save To."
+            note += "\nAll new downloads will go to this folder until you reset it."
         self.where.set_text(note)
         self.remember.set_sensitive(not self.always.get_active())
+        self.reset.set_visible(bool(self.app.settings.get("fixed_folder")) or self.always.get_active())
+        last = Path(self.last_dir).expanduser() if self.last_dir else None
+        show = bool(last) and last != folder and last.is_dir()
+        self.last.set_visible(show)
+        if show:
+            home = str(Path.home())
+            text = str(last)
+            self.last_label.set_text("Last saved to:  " + ("~" + text[len(home):] if text.startswith(home) else text))
+
+    def _show_early(self):
+        it = self.item
+        if not it.get("early") or it["id"] not in self.app.manager.items:
+            self.early_box.set_visible(False)
+            self._early_timer = 0
+            return False
+        size, done = it.get("size", -1), it.get("downloaded", 0)
+        frac = 1.0 if it.get("early_done") else (done / size if size and size > 0 else 0.0)
+        self.early_bar.set_fraction(min(1.0, frac))
+        if it.get("early_done"):
+            text = "Done"
+        elif it.get("status") == "error":
+            text = "Failed · retries on Start"
+        else:
+            speed = util.fmt_speed(it.get("speed")) if it.get("status") == "downloading" else ""
+            text = (f"{frac * 100:.0f}% · " if size and size > 0 else "") + fmt_size(done) + (f" · {speed}" if speed else "")
+        self.early.set_text(text)
+        self.early_box.set_visible(True)
+        return True
+
+    def _stop_early(self, never=None):
+        """Stop temp downloading for this file; `never` = "all" or a file type to switch it off for."""
+        s, it = self.app.settings, self.item
+        self.early_more.popdown()
+        if never == "all":
+            s["early_download"] = False
+        elif never:
+            exts = s.get("early_skip_exts", "").split()
+            if never not in exts:
+                s["early_skip_exts"] = " ".join(exts + [never])
+        if never:
+            s.save()
+        if it.get("early") and it["id"] in self.app.manager.items:
+            self.app.manager.discard_early(it["id"])
+        # back to a normal download that starts when confirmed
+        it.update(early=False, save_dir=it.pop("planned_dir", it["save_dir"]), status="stopped", downloaded=0,
+                  segments=[], speed=0, error="")
+        it.pop("early_done", None)
+        self.early_box.set_visible(False)
+
+    def _on_close(self, *_):
+        if self._early_timer:
+            GLib.source_remove(self._early_timer)
+            self._early_timer = 0
+        if not self._confirmed and self.item.get("early"):
+            # cancelled or closed without confirming: stop the early copy and delete it
+            threading.Thread(target=self.app.manager.discard_early, args=(self.item["id"],), daemon=True).start()
+        return False
+
+    def _use_last(self, *_):
+        name = Path(self.path.get_text()).name or (self.item.get("filename") or "download")
+        self.path.set_text(str(Path(self.last_dir).expanduser() / name))
+
+    def _reset_folder(self, *_):
+        """Back to the default folders: forget the fixed folder now and show the category's folder."""
+        s = self.app.settings
+        if s.get("fixed_folder"):
+            s["fixed_folder"] = ""
+            s.save()
+        self.always.set_active(False)
+        self._on_cat()
+        self._show_where()
+        self.where.set_text(self.where.get_text() + "\nReset: downloads go to the default folders again.")
 
     def _on_cat(self, *_):
         cat = self.cats[self.cat.get_selected()]
@@ -301,6 +426,9 @@ class FileInfoDialog(Dialog):
         it, s = self.item, self.app.settings
         p = Path(self.path.get_text()).expanduser()
         cat = self.cats[self.cat.get_selected()]
+        if s.get("last_save_dir") != str(p.parent):
+            s["last_save_dir"] = str(p.parent)
+            s.save()
         if self.always.get_active():
             s["fixed_folder"] = str(p.parent)
             s.save()
@@ -312,7 +440,28 @@ class FileInfoDialog(Dialog):
                 if c["name"] == cat:
                     c["folder"] = str(p.parent)
             s.save()
-        it.update(url=self.url.get_text().strip(), filename=util_sanitize(p.name), save_dir=str(p.parent),
+        m = self.app.manager
+        url = self.url.get_text().strip()
+        early = bool(it.get("early")) and it["id"] in m.items
+        if early and (url != it["url"] or (self.ytdlp and self.ytdlp.get_active())):
+            m.discard_early(it["id"])          # another link or a video page now: start over properly
+            it.update(early=False, status="stopped", downloaded=0, segments=[], speed=0)
+            it.pop("planned_dir", None)
+            it.pop("early_done", None)
+            early = False
+        if early:
+            # already downloading into the temp folder (this is the same item the task uses, so its
+            # folder and name stay as they are): only say where the file goes
+            it.update(category=cat, description=self.desc.get_text())
+            it.pop("planned_dir", None)
+            queue = "" if start else m.queue_names()[self.queue.get_selected()]
+            self._confirmed = True
+            self.close()
+            m.confirm_early(it["id"], p.parent, util_sanitize(p.name), start, queue)
+            if start and s["show_progress_dialog"]:
+                self.app.show_progress(it)
+            return
+        it.update(url=url, filename=util_sanitize(p.name), save_dir=str(p.parent),
                   category=cat, description=self.desc.get_text())
         if self.ytdlp and self.ytdlp.get_active():
             it["kind"] = "ytdlp"
@@ -323,7 +472,8 @@ class FileInfoDialog(Dialog):
             it.pop("_loading", None)
             stem = Path(it["filename"]).stem or "video"
             it["ytdlp_template"] = stem.replace("%", "%%") + ".%(ext)s"
-        queue = "" if start else self.app.manager.queue_names()[self.queue.get_selected()]
+        queue = "" if start else m.queue_names()[self.queue.get_selected()]
+        self._confirmed = True
         self.close()
         self.app.manager.add(it, start=start, queue=queue)
         if start and s["show_progress_dialog"]:
