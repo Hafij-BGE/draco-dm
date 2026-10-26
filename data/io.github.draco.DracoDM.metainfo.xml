@@ -16,7 +16,7 @@
     <ul>
       <li>Pause, resume and crash recovery</li>
       <li>Browser extension for Chrome, Edge, Brave, Opera, Vivaldi and Firefox</li>
-      <li>Video downloads with quality choice and subtitles (YouTube and 1000+ sites via yt-dlp)</li>
+      <li>Video downloads with quality choice and subtitles (sites supported by yt-dlp)</li>
       <li>Queues with a scheduler, site grabber, batch downloads and a speed limiter</li>
       <li>14 themes, including a classic Windows-style look</li>
     </ul>

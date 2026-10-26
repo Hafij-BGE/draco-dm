@@ -8,7 +8,7 @@ arch=('any')
 url="https://github.com/Hafij-BGE/draco-dm"
 license=('GPL-3.0-or-later')
 depends=('python' 'python-gobject' 'gtk4' 'libadwaita')
-optdepends=('yt-dlp: YouTube and 1000+ video sites'
+optdepends=('yt-dlp: media pages on the sites it supports'
             'ffmpeg: joining video+audio, HLS streams and subtitles')
 
 package() {

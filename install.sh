@@ -91,6 +91,6 @@ if [ "$1" = "--autostart" ]; then
 fi
 
 DRACO_LAUNCHER="$BIN" "$BIN" --install-browser
-command -v yt-dlp >/dev/null || printf "\nOptional: install yt-dlp for YouTube & similar sites:  pipx install yt-dlp\n"
+command -v yt-dlp >/dev/null || printf "\nOptional: install yt-dlp for media pages on supported sites:  pipx install yt-dlp\n"
 command -v ffmpeg >/dev/null || printf "Optional: install ffmpeg for encrypted/live streams:  sudo apt install ffmpeg\n"
 printf "\nDone. Start Draco from your app menu or run: draco\n"

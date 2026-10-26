@@ -35,3 +35,7 @@ for s in 16 24 32 48 64 128 256 512; do
 done
 install -m644 "$SRC/README.md" "$D/share/doc/draco-dm/README.md"
 install -m644 "$SRC/LICENSE" "$D/share/licenses/draco-dm/LICENSE"
+# Third-party notices (ffmpeg is GPL-3.0; source links inside). Also next to the README for
+# formats that drop share/licenses (the .deb keeps share/doc).
+install -m644 "$SRC/THIRD_PARTY_NOTICES.md" "$D/share/licenses/draco-dm/THIRD_PARTY_NOTICES.md"
+install -m644 "$SRC/THIRD_PARTY_NOTICES.md" "$D/share/doc/draco-dm/THIRD_PARTY_NOTICES.md"

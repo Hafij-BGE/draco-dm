@@ -5,7 +5,7 @@
 # Draco Download Manager
 
 **Fast, free download manager for Linux and Windows 11.**<br>
-Multi-connection downloads, browser capture, YouTube and streaming video. No accounts, no trials, no subscriptions.
+Multi-connection downloads, browser capture and streaming media. No accounts, no trials, no subscriptions.
 
 [![Latest release](https://img.shields.io/github/v/release/Hafij-BGE/draco-dm?label=release&color=7c4dff)](https://github.com/Hafij-BGE/draco-dm/releases/latest)
 [![Downloads](https://img.shields.io/github/downloads/Hafij-BGE/draco-dm/total?color=2ea44f)](https://github.com/Hafij-BGE/draco-dm/releases)
@@ -16,7 +16,7 @@ Multi-connection downloads, browser capture, YouTube and streaming video. No acc
 [**Download**](https://github.com/Hafij-BGE/draco-dm/releases/latest) ·
 [Features](#features) ·
 [Browser extension](#browser-extension) ·
-[Video & YouTube](#video-youtube-and-subtitles) ·
+[Media downloads](#media-downloads-and-subtitles) ·
 [Build from source](#build-from-source)
 
 <img src="docs/screenshots/dashboard-galaxy-explorer.jpg" alt="Draco with the Galaxy Explorer theme" width="900">
@@ -28,7 +28,7 @@ Multi-connection downloads, browser capture, YouTube and streaming video. No acc
 - ⚡ **Up to 32 connections per file** with dynamic segmentation: a connection that finishes early takes over half of the largest unfinished piece, so every connection stays busy until the end.
 - ⏯️ **Pause, resume and crash recovery.** Every connection's position is saved, so downloads continue exactly where they stopped, even after a reboot.
 - 🌐 **Browser capture** for Chrome, Edge, Brave, Opera, Vivaldi and Firefox, including snap and Flatpak browsers. Cookies and referrer are passed along, so logged-in downloads work.
-- 🎬 **Video downloads** from YouTube and 1000+ sites, plus HLS/DASH streams, with the size of every quality shown before you choose.
+- 🎬 **Media downloads** from the many sites supported by yt-dlp, plus HLS/DASH streams, with the size of every quality shown before you choose.
 - 🗂️ **Queues, scheduler, categories, speed limiter**, site grabber, batch downloads and a clipboard watcher.
 - ⏱️ **Starts while you choose.** The download begins in a temp folder the moment the save window opens, and moves to your folder when you click Start Download.
 - 🎨 **31 themes**: 17 picture themes (11 light, 6 dark) with an illustrated header, a live planet that follows the selected download, and a progress window coloured by file type, plus 14 classic themes.
@@ -90,15 +90,17 @@ Closing the window keeps Draco running, with no taskbar entry, so browser downlo
 - Turn on **Start Draco hidden at login** to always have it ready. Scheduled queues and snap/Flatpak browsers need this.
 - On Ubuntu's GNOME the icon uses the built-in AppIndicator support. Other GNOME setups need the *AppIndicator and KStatusNotifierItem Support* extension. KDE, Cinnamon, XFCE and Budgie show it natively.
 
-## Video, YouTube and subtitles
+## Media downloads and subtitles
 
-- **YouTube, Vimeo, TikTok, Facebook, Instagram, X, Reddit, Twitch, SoundCloud and 1000+ more** are downloaded through [yt-dlp](https://github.com/yt-dlp/yt-dlp).
+- **Media pages** on the 1000+ sites supported by [yt-dlp](https://github.com/yt-dlp/yt-dlp) are downloaded through it (see its list of supported sites).
 - **⬇ Download this video** appears on the video player. Pick a quality and Draco shows the title, length and estimated size of every quality before it starts.
 - **HLS (`.m3u8`)** streams download in parallel and are joined into one MP4, showing resolution, size and length. Encrypted or live streams and DASH (`.mpd`) go through ffmpeg.
 - **Quick capture** (`Alt+Shift+D`) downloads the current page's video at the best quality with no dialog. The **Quick capture** switch in the extension popup starts every captured download straight away.
 - **Subtitles:** tick **Include subtitles** and they are embedded in the video as a switchable track and also saved as `.srt`. **Subtitles only (.srt)** fetches just the text, in your browser's language with English as a fallback.
 
-Draco runs at most two YouTube downloads at once and retries automatically when YouTube is busy.
+Draco runs at most two media downloads at once and retries automatically when a site is busy.
+
+> Users are responsible for complying with the terms of service and copyright of the content they download. Draco is a general-purpose download manager and is not affiliated with any website.
 
 ## Browser extension
 
@@ -226,3 +228,9 @@ To change the app icon, replace `data/draco-source.png` and run `python3 tools/m
 ## License
 
 Draco Download Manager © 2026 **Md Hafijur Rahman**, licensed under the [GPL-3.0](LICENSE).
+
+This app was generated with AI. Developer support may not be available.
+
+Third-party software bundled in some packages (ffmpeg, yt-dlp) and the libraries Draco uses are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), including links to the ffmpeg source code.
+
+Users are responsible for complying with the terms of service and copyright of the content they download.

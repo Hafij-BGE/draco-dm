@@ -617,6 +617,8 @@ class DracoApp(Adw.Application):
         d = Adw.AboutDialog(application_name=APP_NAME, version=__version__, application_icon="io.github.draco.DracoDM",
                             comments="Free multi-connection download manager for Linux.\n"
                                      "No accounts, no subscription, no trial.\n\n"
+                                     "Users are responsible for complying with the terms of service and "
+                                     "copyright of the content they download.\n\n"
                                      "This app was generated with AI. Developer support may not be available.",
                             license_type=Gtk.License.GPL_3_0, developer_name="Md. Hafijur Rahman",
                             developers=["Md. Hafijur Rahman"], designers=["Md. Hafijur Rahman"],
@@ -624,6 +626,13 @@ class DracoApp(Adw.Application):
                             issue_url="https://github.com/Hafij-BGE/draco-dm/issues")
         d.add_link("GitHub", "https://github.com/Hafij-BGE/draco-dm")
         d.add_credit_section("Created by", ["Md. Hafijur Rahman"])
+        d.add_acknowledgement_section("Built with", [
+            "yt-dlp https://github.com/yt-dlp/yt-dlp", "FFmpeg https://ffmpeg.org",
+            "GTK 4 https://gtk.org", "libadwaita https://gnome.pages.gitlab.gnome.org/libadwaita/"])
+        d.add_legal_section("FFmpeg", None, Gtk.License.CUSTOM,
+                            "GNU General Public License v3.0 (see the LICENSE file). Bundled in the Windows installer, AppImage and Flatpak as a separate program. "
+                            "Source code: https://ffmpeg.org/download.html and the links in THIRD_PARTY_NOTICES.md.")
+        d.add_legal_section("yt-dlp", None, Gtk.License.CUSTOM, "The Unlicense (public domain).")
         d.present(self.window)
 
     def _browser_help(self):

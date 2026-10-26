@@ -9,7 +9,7 @@ OUT="$SRC/dist/build/$NAME"
 rm -rf "$OUT"
 mkdir -p "$OUT"
 cp -r "$SRC/draco" "$SRC/native_host" "$SRC/extension" "$SRC/bin" "$SRC/data" \
-      "$SRC/install.sh" "$SRC/README.md" "$SRC/LICENSE" "$OUT/"
+      "$SRC/install.sh" "$SRC/README.md" "$SRC/LICENSE" "$SRC/THIRD_PARTY_NOTICES.md" "$OUT/"
 rm -f "$OUT/data/galaxy-photo.png" "$OUT/data/draco-source.png" "$OUT/bin/draco-app.pyw"
 find "$OUT" -name __pycache__ -type d -prune -exec rm -rf {} +
 mkdir -p "$SRC/dist"

@@ -20,7 +20,7 @@ powershell -ExecutionPolicy Bypass -File packaging\windows\build.ps1
 The script:
 1. Installs GTK 4, libadwaita, PyGObject and PyInstaller inside MSYS2.
 2. Freezes the app into `dist\Draco\` (`Draco.exe` plus `draco-host.exe`, the browser helper).
-3. Downloads `yt-dlp.exe` and `ffmpeg.exe` next to `Draco.exe`. They're needed for YouTube, HLS streams and subtitles.
+3. Downloads `yt-dlp.exe` and `ffmpeg.exe` next to `Draco.exe`. They're needed for media-page downloads, HLS streams and subtitles.
 4. Builds the installer **`dist\DracoSetup-1.4.0.exe`** with Inno Setup.
 
 ## What the installer does

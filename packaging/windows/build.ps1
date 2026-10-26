@@ -34,6 +34,11 @@ if (-not (Test-Path "$tools\ffmpeg.exe")) {
     Copy-Item (Get-ChildItem "$env:TEMP\ffmpeg-release" -Recurse -Filter ffmpeg.exe | Select-Object -First 1).FullName $tools
 }
 
+# Licences: Draco, third-party notices (ffmpeg source links) and ffmpeg's own licence file
+Copy-Item "$root\LICENSE", "$root\THIRD_PARTY_NOTICES.md" $tools
+$ffl = Get-ChildItem "$env:TEMP\ffmpeg-release" -Recurse -Filter LICENSE* -ErrorAction SilentlyContinue | Select-Object -First 1
+if ($ffl) { Copy-Item $ffl.FullName "$tools\ffmpeg-LICENSE.txt" }
+
 # 4. Installer: dist\DracoSetup-<version>.exe
 & $iscc "$root\packaging\windows\installer.iss"
 Write-Host "`nDone: $(Get-ChildItem "$root\dist\DracoSetup-*.exe" | Select-Object -Last 1)"
