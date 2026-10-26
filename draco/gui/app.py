@@ -616,11 +616,14 @@ class DracoApp(Adw.Application):
     def _about(self):
         d = Adw.AboutDialog(application_name=APP_NAME, version=__version__, application_icon="io.github.draco.DracoDM",
                             comments="Free multi-connection download manager for Linux.\n"
-                                     "No accounts, no subscription, no trial.",
-                            license_type=Gtk.License.GPL_3_0, developer_name=AUTHOR,
-                            developers=[AUTHOR], designers=[AUTHOR],
-                            copyright=f"© 2026 {AUTHOR}")
-        d.add_credit_section("Created by", [AUTHOR])
+                                     "No accounts, no subscription, no trial.\n\n"
+                                     "This app was generated with AI. Developer support may not be available.",
+                            license_type=Gtk.License.GPL_3_0, developer_name="Md. Hafijur Rahman",
+                            developers=["Md. Hafijur Rahman"], designers=["Md. Hafijur Rahman"],
+                            copyright="© 2026 Md. Hafijur Rahman",
+                            issue_url="https://github.com/Hafij-BGE/draco-dm/issues")
+        d.add_link("GitHub", "https://github.com/Hafij-BGE/draco-dm")
+        d.add_credit_section("Created by", ["Md. Hafijur Rahman"])
         d.present(self.window)
 
     def _browser_help(self):

@@ -30,6 +30,7 @@
     <category>FileTransfer</category>
   </categories>
   <releases>
+    <release version="1.8.7" date="2026-10-26"/>
     <release version="1.8.6" date="2026-10-22"/>
     <release version="1.8.5" date="2026-10-22"/>
     <release version="1.8.4" date="2026-10-22"/>
