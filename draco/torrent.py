@@ -1,0 +1,558 @@
+"""BitTorrent downloads (magnet links and .torrent files), run by aria2c.
+
+* The torrent's file list ("metadata") comes first: a .torrent link is fetched like any file,
+  a local .torrent is read, and a magnet link asks the swarm (aria2c --bt-metadata-only).
+  The .torrent is kept in DATA_DIR/torrents/<info hash>.torrent, so pausing, restarting
+  Draco and seeding never need the swarm for it again.
+* Then one aria2c per torrent downloads the chosen files (--select-file) into the chosen
+  folder (--dir, --index-out when the top folder/file was renamed). Draco reads its progress
+  over aria2's JSON-RPC on 127.0.0.1 with a random secret.
+* Pausing shuts aria2 down cleanly, so its .aria2 control file is current and the next start
+  continues. When the files are complete the download counts as finished; with seeding on it
+  keeps sharing (status "seeding") until the ratio or time limit, then it is "complete".
+"""
+
+import base64
+import hashlib
+import json
+import os
+import re
+import secrets
+import socket
+import subprocess
+import threading
+import time
+import urllib.parse
+import urllib.request
+from pathlib import Path
+
+from .config import DATA_DIR
+from .engine import DownloadError, build_headers, build_opener, open_url, sanitize_filename
+from .media import _TaskBase
+from .osdeps import IS_WIN, popen_kwargs, which
+
+ARIA2 = which("aria2c")
+TORRENT_DIR = DATA_DIR / "torrents"
+MAX_TORRENT_FILE = 32 * 1024 * 1024
+INSTALL_HINT = ("Torrents need aria2c.exe next to Draco.exe (reinstall Draco)" if IS_WIN
+                else "Torrents need aria2 (sudo apt install aria2)")
+
+
+# ---------------------------------------------------------------- bencode
+def _decode(data, i):
+    c = data[i:i + 1]
+    if c == b"i":
+        end = data.index(b"e", i)
+        return int(data[i + 1:end]), end + 1
+    if c == b"l":
+        out, i = [], i + 1
+        while data[i:i + 1] != b"e":
+            v, i = _decode(data, i)
+            out.append(v)
+        return out, i + 1
+    if c == b"d":
+        out, i = {}, i + 1
+        while data[i:i + 1] != b"e":
+            k, i = _decode(data, i)
+            start = i
+            v, i = _decode(data, i)
+            out[k] = v
+            if k == b"info":
+                out[b"\0info-span"] = (start, i)     # the info dict as it was written (for the hash)
+        return out, i + 1
+    if c.isdigit():
+        colon = data.index(b":", i)
+        n = int(data[i:colon])
+        if n < 0 or colon + 1 + n > len(data):
+            raise ValueError("bad string length")
+        return data[colon + 1:colon + 1 + n], colon + 1 + n
+    raise ValueError(f"bad bencode at byte {i}")
+
+
+def bdecode(data):
+    try:
+        value, end = _decode(bytes(data), 0)
+    except (IndexError, ValueError, RecursionError) as e:
+        raise ValueError(f"not a torrent file ({e})") from None
+    return value
+
+
+def bencode(v):
+    if isinstance(v, bool):
+        v = int(v)
+    if isinstance(v, int):
+        return b"i%de" % v
+    if isinstance(v, str):
+        v = v.encode()
+    if isinstance(v, (bytes, bytearray)):
+        return b"%d:%s" % (len(v), bytes(v))
+    if isinstance(v, (list, tuple)):
+        return b"l" + b"".join(bencode(x) for x in v) + b"e"
+    if isinstance(v, dict):
+        items = sorted((k.encode() if isinstance(k, str) else k, x) for k, x in v.items())
+        return b"d" + b"".join(bencode(k) + bencode(x) for k, x in items) + b"e"
+    raise TypeError(type(v))
+
+
+# ---------------------------------------------------------------- torrent files
+def _text(d, key):
+    raw = d.get(key + b".utf-8", d.get(key, b""))
+    return raw.decode("utf-8", "replace") if isinstance(raw, bytes) else str(raw)
+
+
+def _safe_part(part):
+    part = sanitize_filename(part).strip()
+    return "_" if part in ("", ".", "..") else part
+
+
+def parse_torrent(data):
+    """{'name', 'info_hash', 'size', 'files': [{'path', 'size', 'pad'}], 'private'} from .torrent bytes.
+
+    File paths start with the torrent's name (the top folder, or the file itself), use "/" and
+    are made safe (no "..", no characters the file system refuses). The list order is aria2's
+    file index (1-based)."""
+    meta = bdecode(data)
+    if not isinstance(meta, dict) or not isinstance(meta.get(b"info"), dict):
+        raise ValueError("not a torrent file")
+    start, end = meta[b"\0info-span"]
+    info = meta[b"info"]
+    name = _safe_part(_text(info, b"name") or "torrent")
+    files = []
+    if b"files" in info:
+        for f in info[b"files"]:
+            raw = f.get(b"path.utf-8") or f.get(b"path") or []
+            pad = b"p" in (f.get(b"attr") or b"") or raw[:1] == [b".pad"]
+            parts = [_safe_part(p.decode("utf-8", "replace")) for p in raw]
+            files.append({"path": "/".join([name] + parts), "size": int(f.get(b"length", 0)), "pad": pad})
+    elif b"length" in info:
+        files.append({"path": name, "size": int(info[b"length"]), "pad": False})
+    else:
+        raise ValueError("BitTorrent v2-only torrents are not supported")
+    return {"name": name, "info_hash": hashlib.sha1(bytes(data)[start:end]).hexdigest(),
+            "size": sum(f["size"] for f in files if not f["pad"]), "files": files,
+            "private": bool(info.get(b"private"))}
+
+
+def save_torrent(data):
+    """Keep a .torrent in Draco's own folder; returns (path, parsed info)."""
+    info = parse_torrent(data)
+    TORRENT_DIR.mkdir(parents=True, exist_ok=True)
+    path = TORRENT_DIR / f"{info['info_hash']}.torrent"
+    if not path.exists() or path.read_bytes() != bytes(data):
+        tmp = path.with_suffix(".tmp")
+        tmp.write_bytes(bytes(data))
+        os.replace(tmp, path)
+    return path, info
+
+
+def load_torrent(path):
+    return parse_torrent(Path(path).read_bytes())
+
+
+# ---------------------------------------------------------------- links
+_BTIH = re.compile(r"urn:btih:([0-9a-fA-F]{40}|[A-Za-z2-7]{32})")
+
+
+def is_magnet(url):
+    return (url or "").strip().lower().startswith("magnet:?")
+
+
+def local_torrent(url):
+    """A .torrent file on this computer (path or file:// link), else None."""
+    url = (url or "").strip()
+    if url.lower().startswith("file://"):
+        url = urllib.parse.unquote(urllib.parse.urlparse(url).path)
+        if os.name == "nt" and re.match(r"^/[A-Za-z]:", url):
+            url = url[1:]
+    if not url.lower().endswith(".torrent"):
+        return None
+    p = Path(url).expanduser()
+    return p if p.is_absolute() and p.is_file() else None
+
+
+def is_torrent_link(url, content_type=""):
+    url = (url or "").strip()
+    if is_magnet(url) or local_torrent(url):
+        return True
+    if "bittorrent" in (content_type or "").lower():
+        return True
+    if url.lower().startswith(("http://", "https://")):
+        return urllib.parse.urlparse(url).path.lower().endswith(".torrent")
+    return False
+
+
+def magnet_info(url):
+    """(info hash in hex or "", display name or "") of a magnet link."""
+    q = urllib.parse.parse_qs(urllib.parse.urlparse(url.strip()).query)
+    ih = ""
+    for xt in q.get("xt", []):
+        m = _BTIH.search(xt)
+        if m:
+            h = m.group(1)
+            ih = h.lower() if len(h) == 40 else base64.b32decode(h.upper()).hex()
+            break
+    return ih, (q.get("dn") or [""])[0]
+
+
+def guess_name(url):
+    """A first name for the list while the torrent's own name is still unknown."""
+    if is_magnet(url):
+        ih, dn = magnet_info(url)
+        return sanitize_filename(dn) if dn else (f"torrent {ih[:8]}" if ih else "torrent")
+    p = local_torrent(url)
+    base = p.name if p else urllib.parse.unquote(urllib.parse.urlparse(url).path.rsplit("/", 1)[-1])
+    stem = base[:-8] if base.lower().endswith(".torrent") else base
+    return sanitize_filename(stem or "torrent")
+
+
+# ---------------------------------------------------------------- aria2
+def _free_port():
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+        s.bind(("127.0.0.1", 0))
+        return s.getsockname()[1]
+
+
+def _base_opts():
+    TORRENT_DIR.mkdir(parents=True, exist_ok=True)
+    return ["--console-log-level=error", "--summary-interval=0", "--enable-color=false",
+            "--download-result=hide", f"--stop-with-process={os.getpid()}",
+            "--enable-dht=true", f"--dht-file-path={TORRENT_DIR / 'dht.dat'}", "--bt-enable-lpd=true",
+            "--follow-torrent=false", "--file-allocation=none", "--auto-file-renaming=false"]
+
+
+_ERRORS = {"9": "Not enough disk space", "13": "A file with this name is already there",
+           "16": "Could not create a file in the download folder", "17": "Could not write the file",
+           "18": "Could not create the folder", "6": "Network problem", "2": "Timed out",
+           "3": "Not found", "26": "Bad torrent file", "27": "Bad magnet link"}
+
+
+def _error_text(lines, rc):
+    for line in reversed(lines):
+        m = re.search(r"errorCode=(\d+)\s*(.*)", line)
+        if m:
+            return f"{_ERRORS.get(m.group(1), 'aria2 error')}: {m.group(2).strip()[:200]}"
+    for line in reversed(lines):
+        if "[ERROR]" in line or "Exception" in line:
+            return line.strip()[:240]
+    return _ERRORS.get(str(rc), f"aria2 stopped (exit code {rc})")
+
+
+def fetch_metadata(item, settings, stop_event=None, timeout=180, on_proc=None):
+    """Make sure the item has its .torrent; returns (path, info). Raises DownloadError."""
+    stop_event = stop_event or threading.Event()
+    if item.get("torrent_file") and Path(item["torrent_file"]).is_file():
+        try:
+            return Path(item["torrent_file"]), load_torrent(item["torrent_file"])
+        except (OSError, ValueError):
+            pass                                   # damaged copy: fetch it again
+    url = item["url"].strip()
+    local = local_torrent(url)
+    try:
+        if local:
+            data = local.read_bytes()[:MAX_TORRENT_FILE + 1]
+        elif is_magnet(url):
+            data = _magnet_metadata(url, stop_event, timeout, on_proc)
+        else:
+            resp = open_url(build_opener(settings), item.get("final_url") or url,
+                            build_headers(item, settings), settings["timeout"])
+            data = resp.read(MAX_TORRENT_FILE + 1)
+        if len(data) > MAX_TORRENT_FILE:
+            raise DownloadError("The .torrent file is too large")
+        path, info = save_torrent(data)
+    except ValueError as e:
+        raise DownloadError(f"The link did not give a usable .torrent file ({e})") from None
+    except OSError as e:
+        raise DownloadError(str(e)) from None
+    item["torrent_file"], item["info_hash"] = str(path), info["info_hash"]
+    return path, info
+
+
+def _magnet_metadata(url, stop_event, timeout, on_proc=None):
+    if not ARIA2:
+        raise DownloadError(INSTALL_HINT)
+    ih, _dn = magnet_info(url)
+    if ih and (TORRENT_DIR / f"{ih}.torrent").is_file():
+        return (TORRENT_DIR / f"{ih}.torrent").read_bytes()
+    work = TORRENT_DIR / f".meta-{secrets.token_hex(4)}"
+    work.mkdir(parents=True, exist_ok=True)
+    cmd = [ARIA2] + _base_opts() + ["--bt-metadata-only=true", "--bt-save-metadata=true",
+                                    "--seed-time=0", f"--dir={work}", url]
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                            encoding="utf-8", errors="replace", **popen_kwargs())
+    if on_proc:
+        on_proc(proc)
+    lines = []
+    threading.Thread(target=lambda: [lines.append(x) for x in proc.stdout], daemon=True).start()
+    try:
+        end = time.monotonic() + timeout
+        while proc.poll() is None:
+            if stop_event.wait(0.3):
+                raise DownloadError("Stopped")
+            if time.monotonic() > end:
+                raise DownloadError("No one shared this torrent's file list in time "
+                                    "(no peers yet; try again later)")
+        found = sorted(work.glob("*.torrent"))
+        if not found:
+            raise DownloadError(_error_text(lines, proc.returncode))
+        return found[0].read_bytes()
+    finally:
+        if proc.poll() is None:
+            proc.terminate()
+            try:
+                proc.wait(5)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+        for p in work.glob("*"):
+            try:
+                p.unlink()
+            except OSError:
+                pass
+        try:
+            work.rmdir()
+        except OSError:
+            pass
+
+
+# ---------------------------------------------------------------- where the files are
+def selected_indices(item, info):
+    """aria2 file numbers (1-based) to download: the user's choice, never padding files."""
+    files = info["files"]
+    chosen = item.get("torrent_select")
+    wanted = set(chosen) if chosen else set(range(1, len(files) + 1))
+    return [i for i in range(1, len(files) + 1) if i in wanted and not files[i - 1]["pad"]]
+
+
+def mapped_path(item, info, rel):
+    """A torrent file path (starting with the torrent's name) under the root the item uses."""
+    root = item.get("filename") or info["name"]
+    return root + rel[len(info["name"]):] if root != info["name"] else rel
+
+
+def data_paths(item):
+    """The item's files on disk (for deleting a download), top folder last."""
+    try:
+        info = load_torrent(item["torrent_file"])
+    except (KeyError, OSError, ValueError, TypeError):
+        return []
+    base = Path(item["save_dir"])
+    out = [base / mapped_path(item, info, info["files"][i - 1]["path"]) for i in selected_indices(item, info)]
+    root = base / (item.get("filename") or info["name"])
+    for name in {item.get("filename") or "", info["name"]} - {""}:
+        out.append(base / (name + ".aria2"))
+    if len(info["files"]) > 1 or info["files"][0]["path"] != info["name"]:
+        out.append(root)                           # the folder, removed only when empty
+    return out
+
+
+def delete_data(item):
+    for p in data_paths(item):
+        try:
+            if p.is_dir():
+                for sub in sorted(p.rglob("*"), key=lambda x: len(x.parts), reverse=True):
+                    if sub.is_dir():
+                        try:
+                            sub.rmdir()            # only empty folders: never someone else's files
+                        except OSError:
+                            pass
+                p.rmdir()
+            elif p.is_file():
+                p.unlink()
+        except OSError:
+            pass
+
+
+# ---------------------------------------------------------------- the task
+class TorrentTask(_TaskBase):
+    kind = "torrent"
+    on_downloaded = None        # set by the manager: called once when all chosen files are there
+
+    def __init__(self, *a, **k):
+        super().__init__(*a, **k)
+        self.port = 0
+        self.secret = ""
+        self.gid = None
+        self.done = False
+        self._meta_proc = None
+        self._rpc_opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
+    def stop(self):
+        # aria2 is shut down from the task's own loop (cleanly, so it can save where it was)
+        self.stop_event.set()
+        mp = self._meta_proc
+        if mp and mp.poll() is None:
+            mp.terminate()
+
+    def set_speed_limit(self, kbps):
+        super().set_speed_limit(kbps)
+        if self.gid:
+            threading.Thread(target=self._rpc, args=("aria2.changeOption", self.gid,
+                                                     {"max-download-limit": f"{int(kbps)}K"}),
+                             daemon=True).start()
+
+    def _rpc(self, method, *params):
+        body = json.dumps({"jsonrpc": "2.0", "id": "draco", "method": method,
+                           "params": [f"token:{self.secret}", *params]}).encode()
+        req = urllib.request.Request(f"http://127.0.0.1:{self.port}/jsonrpc", body,
+                                     {"Content-Type": "application/json"})
+        try:
+            with self._rpc_opener.open(req, timeout=3) as r:
+                return json.loads(r.read().decode()).get("result")
+        except (OSError, ValueError):
+            return None
+
+    def _command(self, path, info):
+        it, s = self.item, self.settings
+        cmd = [ARIA2] + _base_opts() + [
+            "--enable-rpc=true", "--rpc-listen-all=false", f"--rpc-listen-port={self.port}",
+            f"--rpc-secret={self.secret}", f"--dir={it['save_dir']}", "--continue=true",
+            "--bt-save-metadata=false", "--rpc-save-upload-metadata=false"]
+        idx = selected_indices(it, info)
+        if len(idx) < len(info["files"]):
+            cmd.append("--select-file=" + ",".join(map(str, idx)))
+        if (it.get("filename") or info["name"]) != info["name"]:
+            # every file, not only the chosen ones: aria2 also writes the edge pieces of the others
+            for i in range(1, len(info["files"]) + 1):
+                cmd.append(f"--index-out={i}={mapped_path(it, info, info['files'][i - 1]['path'])}")
+        root = Path(it["save_dir"]) / (it.get("filename") or info["name"])
+        control = Path(str(root) + ".aria2")
+        if root.exists() and not control.exists():
+            cmd.append("--check-integrity=true")    # files already there: keep the good pieces
+        if s.get("torrent_seed", True):
+            cmd.append(f"--seed-ratio={max(0.0, float(s.get('torrent_seed_ratio', 1.0) or 0))}")
+            minutes = int(s.get("torrent_seed_minutes", 60) or 0)
+            if minutes > 0:                             # 0 = no time limit (aria2: no --seed-time)
+                cmd.append(f"--seed-time={minutes}")
+        else:
+            cmd.append("--seed-time=0")
+        up = int(s.get("torrent_upload_kbps", 0) or 0)
+        if up:
+            cmd.append(f"--max-upload-limit={up}K")
+        down = int(it.get("speed_limit_kbps") or 0)
+        if down:
+            cmd.append(f"--max-download-limit={down}K")
+        if s["speed_limit_kbps"]:
+            cmd.append(f"--max-overall-download-limit={int(s['speed_limit_kbps'])}K")
+        port = str(s.get("torrent_port", "") or "").strip()
+        if re.fullmatch(r"\d{2,5}(-\d{2,5})?", port):
+            cmd.append(f"--listen-port={port}")
+        return cmd + [str(path)]
+
+    def _apply_info(self, info):
+        it = self.item
+        it["torrent_name"] = info["name"]
+        it["torrent_files"] = [{"path": f["path"], "size": f["size"], "pad": f["pad"]} for f in info["files"]]
+        idx = selected_indices(it, info)
+        it["size"] = sum(info["files"][i - 1]["size"] for i in idx)
+        if not it.get("torrent_named"):
+            root = sanitize_filename(it.get("torrent_rename") or info["name"])
+            reserve = getattr(self, "reserve_name", None)
+            it["filename"] = reserve(it, root) if reserve else root
+            it["torrent_named"] = True
+        self.on_update(it)
+
+    def _run(self):
+        it = self.item
+        if not ARIA2:
+            raise DownloadError(INSTALL_HINT)
+        self._set(status="connecting", speed=0)
+        path, info = fetch_metadata(it, self.settings, self.stop_event,
+                                    on_proc=lambda p: setattr(self, "_meta_proc", p))
+        if self.stop_event.is_set():
+            return False
+        self._apply_info(info)
+        Path(it["save_dir"]).mkdir(parents=True, exist_ok=True)
+        self.port, self.secret = _free_port(), secrets.token_hex(16)
+        self.proc = subprocess.Popen(self._command(path, info), stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                     text=True, encoding="utf-8", errors="replace", **popen_kwargs())
+        lines = []
+
+        def read():
+            for line in self.proc.stdout:
+                lines.append(line.rstrip())
+                del lines[:-40]
+        threading.Thread(target=read, daemon=True).start()
+        keys = ["gid", "status", "totalLength", "completedLength", "uploadLength", "downloadSpeed",
+                "uploadSpeed", "connections", "numSeeders", "seeder", "verifiedLength", "errorCode", "errorMessage"]
+        quit_sent = 0.0
+        failed = ""
+        while self.proc.poll() is None:
+            if self.stop_event.is_set() or failed or (self.done and quit_sent):
+                if not quit_sent:
+                    quit_sent = time.monotonic()
+                    self._rpc("aria2.forceShutdown")
+                elif time.monotonic() - quit_sent > 8:
+                    self.proc.terminate()
+                    try:
+                        self.proc.wait(5)
+                    except subprocess.TimeoutExpired:
+                        self.proc.kill()
+                    break
+            else:
+                # With RPC on, aria2 keeps running after the torrent stops (complete, seeding
+                # limit reached or failed): read it from the stopped list and shut aria2 down.
+                active = self._rpc("aria2.tellActive", keys)
+                st = active[0] if active else None
+                if active == []:
+                    st = (self._rpc("aria2.tellStopped", 0, 1, keys) or [None])[0]
+                if st:
+                    self._update(st)
+                    if st.get("status") == "error":
+                        failed = st.get("errorMessage") or f"aria2 error {st.get('errorCode', '')}".strip()
+                    if st.get("status") in ("complete", "error", "removed"):
+                        quit_sent = time.monotonic()
+                        self._rpc("aria2.shutdown")
+            time.sleep(0.5)
+        self.proc.wait()
+        try:
+            self.proc.stdout.close()
+        except OSError:
+            pass
+        rc = self.proc.returncode
+        if failed and not self.done:
+            it["error"] = failed[:240]
+            return False
+        if self.done or (rc == 0 and not self.stop_event.is_set()):
+            self._mark_done()
+            it["downloaded"] = it["size"]
+            return True
+        if self.stop_event.is_set():
+            return False
+        it["error"] = _error_text(lines, rc)
+        return False
+
+    def _update(self, st):
+        it = self.item
+
+        def n(k):
+            try:
+                return int(st.get(k) or 0)
+            except ValueError:
+                return 0
+        self.gid = st.get("gid")
+        total, done = n("totalLength"), n("completedLength")
+        it["downloaded"] = min(done, it["size"]) if it.get("size", -1) > 0 else done
+        if total and it.get("size", -1) <= 0:
+            it["size"] = total
+        it["speed"] = self.speed = n("downloadSpeed")
+        it["up_speed"] = n("uploadSpeed")
+        it["uploaded"] = n("uploadLength")
+        it["peers"], it["seeds"] = n("connections"), n("numSeeders")
+        if st.get("seeder") == "true" or (total and done >= total):
+            it["downloaded"] = it["size"]
+            seeding = st.get("status") == "active" and self.settings.get("torrent_seed", True)
+            it["status"] = "seeding" if seeding else "checking"
+            it["speed"] = self.speed = 0
+            self._mark_done()
+        elif "verifiedLength" in st:
+            it["status"] = "checking"          # checking the files that are already there
+        else:
+            it["status"] = "downloading" if (it["peers"] or it["speed"]) else "connecting"
+        self.on_update(it)
+
+    def _mark_done(self):
+        if not self.done:
+            self.done = True
+            it = self.item
+            it["finished"] = time.time()
+            if self.on_downloaded:
+                self.on_downloaded(it)

@@ -15,13 +15,17 @@ from pathlib import Path
 from .config import DOWNLOADS_FILE, Settings
 from .engine import HttpTask, RateLimiter, sanitize_filename, unique_path
 from .media import FfmpegTask, HlsTask, YtdlpTask, is_hls
+from . import torrent
+from .torrent import TorrentTask
 
-TASKS = {"http": HttpTask, "hls": HlsTask, "ffmpeg": FfmpegTask, "ytdlp": YtdlpTask}
-TRANSIENT = {"speed", "_dirty"}
-ACTIVE = ("connecting", "downloading", "merging")
+TASKS = {"http": HttpTask, "hls": HlsTask, "ffmpeg": FfmpegTask, "ytdlp": YtdlpTask, "torrent": TorrentTask}
+TRANSIENT = {"speed", "_dirty", "_announced", "up_speed"}
+ACTIVE = ("connecting", "downloading", "merging", "checking")
 
 
 def guess_kind(url, content_type=""):
+    if torrent.is_torrent_link(url, content_type):
+        return "torrent"
     if is_hls(url, content_type):
         return "hls"
     if urllib.parse.urlparse(url).path.lower().endswith(".mpd") or "dash+xml" in (content_type or ""):
@@ -63,7 +67,9 @@ class Manager:
         except (OSError, ValueError):
             return
         for it in data.get("items", []):
-            if it.get("status") in ACTIVE:
+            if it.get("status") == "seeding":
+                it["status"] = "complete"   # the files were all there; seeding stops with the app
+            elif it.get("status") in ACTIVE:
                 it["status"] = "paused"  # was running when the app quit/crashed
             it["speed"] = 0
             self.items[it["id"]] = it
@@ -90,8 +96,11 @@ class Manager:
                  final_url="", user_agent=""):
         filename = sanitize_filename(filename) if filename else ""
         kind = kind or guess_kind(url, content_type)
-        category = ("Video" if kind in ("hls", "ffmpeg", "ytdlp")
-                    else self.settings.category_for(filename or urllib.parse.urlparse(url).path))
+        if kind == "torrent":
+            category, filename = "General", filename or torrent.guess_name(url)
+        else:
+            category = ("Video" if kind in ("hls", "ffmpeg", "ytdlp")
+                        else self.settings.category_for(filename or urllib.parse.urlparse(url).path))
         return {
             "id": uuid.uuid4().hex[:12],
             "url": url, "final_url": final_url, "referer": referer, "cookies": cookies,
@@ -142,6 +151,8 @@ class Manager:
                        on_update=lambda i: self.emit("changed", i),
                        on_finish=self._on_finish)
             task.reserve_name = self._reserve_name
+            if isinstance(task, TorrentTask):
+                task.on_downloaded = self._on_downloaded
             self.tasks[item_id] = task
             it["status"] = "connecting"
         task.start()
@@ -180,6 +191,15 @@ class Manager:
     def task(self, item_id):
         return self.tasks.get(item_id)
 
+    def _on_downloaded(self, item):
+        """A torrent has all its files and goes on seeding: it counts as finished now."""
+        item["_announced"] = True
+        self.dirty = True
+        self.emit("finished", item)
+        if self.settings["antivirus_cmd"]:
+            threading.Thread(target=self._scan, args=(item,), daemon=True).start()
+        self.pump_queues()
+
     def _on_finish(self, item, ok):
         with self.lock:
             self.tasks.pop(item["id"], None)
@@ -193,6 +213,10 @@ class Manager:
             return
         if ok and item.get("move_to"):
             self._move_final(item)
+        if item.pop("_announced", False):
+            self.emit("changed", item)       # seeding ended: "finished" was already announced
+            self.pump_queues()
+            return
         self.emit("finished", item)
         if ok and self.settings["antivirus_cmd"]:
             threading.Thread(target=self._scan, args=(item,), daemon=True).start()
@@ -269,12 +293,17 @@ class Manager:
             task = self.tasks.get(item_id)
             if task:
                 task.stop()
-                task.join(5)
+                task.join(15 if isinstance(task, TorrentTask) else 5)
             with self.lock:
                 it = self.items.pop(item_id, None)
             if not it:
                 continue
             base = Path(it["save_dir"])
+            if it.get("kind") == "torrent":
+                if delete_files or not it.get("finished"):   # unfinished data is only a part
+                    torrent.delete_data(it)
+                self.emit("removed", it)
+                continue
             for p in (base / (it["filename"] + self.settings["temp_suffix"]),):
                 if it["filename"] and p.exists():
                     p.unlink()
@@ -292,9 +321,12 @@ class Manager:
         it = self.items.get(item_id)
         if not it or item_id in self.tasks:
             return
-        tmp = Path(it["save_dir"]) / (it["filename"] + self.settings["temp_suffix"])
-        if tmp.exists():
-            tmp.unlink()
+        if it.get("kind") == "torrent":
+            torrent.delete_data(it)
+        else:
+            tmp = Path(it["save_dir"]) / (it["filename"] + self.settings["temp_suffix"])
+            if tmp.exists():
+                tmp.unlink()
         it.update(segments=[], downloaded=0, status="stopped", probed=False, size=-1, error="",
                   finished=None)
         self.emit("changed", it)
@@ -374,7 +406,7 @@ class Manager:
                 conf = self.queue_conf(name) or {}
                 retry = conf.get("schedule", {}).get("retry_failed", True)
                 items = self.queue_items(name)
-                active = [i for i in items if i["id"] in self.tasks]
+                active = [i for i in items if i["id"] in self.tasks and i["status"] != "seeding"]
                 waiting = [i for i in items if i["id"] not in self.tasks and i["status"] != "complete"
                            and (i["status"] != "error" or (retry and i["id"] not in self._queue_skip))]
                 slots = max(1, int(conf.get("max_active", 1))) - len(active)

@@ -91,6 +91,24 @@ class PrefsDialog(Adw.PreferencesDialog):
         self._entry(g, "proxy", "Proxy (http://host:port, empty = system/none)")
         self._entry(g, "user_agent", "User agent")
         p.add(g)
+        from ..torrent import ARIA2, INSTALL_HINT
+        g = Adw.PreferencesGroup(title="Torrents",
+                                 description=("Magnet links and .torrent files are downloaded with aria2."
+                                              if ARIA2 else INSTALL_HINT + ", then restart Draco."))
+        self._switch(g, "torrent_seed", "Keep sharing finished torrents (seeding)")
+        self.rows["torrent_seed"].set_subtitle("Others downloaded parts from you too; give some back")
+        r = _spin("Stop sharing at ratio (0 = no limit)", 0, 100, 0.1, float(s["torrent_seed_ratio"] or 0),
+                  "Uploaded ÷ size, e.g. 1.0 = once the whole size")
+        r.set_digits(1)
+        self.rows["torrent_seed_ratio"] = r
+        self.rows["torrent_seed_minutes"] = _spin("Stop sharing after (minutes, 0 = no limit)", 0, 100000, 10,
+                                                  int(s["torrent_seed_minutes"] or 0))
+        self.rows["torrent_upload_kbps"] = _spin("Upload limit per torrent (KB/s, 0 = off)", 0, 1024 * 1024, 16,
+                                                 int(s["torrent_upload_kbps"] or 0))
+        for k in ("torrent_seed_ratio", "torrent_seed_minutes", "torrent_upload_kbps"):
+            g.add(self.rows[k])
+        self._entry(g, "torrent_port", "Listening port(s), e.g. 6881-6999 (empty = automatic)")
+        p.add(g)
         self.add(p)
 
         # ---------------- Save to
@@ -213,6 +231,7 @@ class PrefsDialog(Adw.PreferencesDialog):
             elif isinstance(row, Adw.EntryRow):
                 s[key] = row.get_text().strip()
         s["queues"][0]["max_active"] = int(self.rows["max_active"].get_value())
+        s["torrent_seed_ratio"] = round(self.rows["torrent_seed_ratio"].get_value(), 2)
         s["duplicate_action"] = "overwrite" if self.dup.get_selected() == 1 else "rename"
         s["progress_window"] = "classic" if self.pw_style.get_selected() == 1 else "category"
         for cat, ext, fol in self.cat_rows:

@@ -29,7 +29,7 @@ Section: net
 Priority: optional
 Architecture: all
 Installed-Size: $SIZE
-Depends: python3 (>= 3.10), python3-gi, gir1.2-gtk-4.0, gir1.2-adw-1
+Depends: python3 (>= 3.10), python3-gi, gir1.2-gtk-4.0, gir1.2-adw-1, aria2
 Recommends: ffmpeg, yt-dlp
 Suggests: clamav
 Maintainer: Md Hafijur Rahman <draco@localhost>

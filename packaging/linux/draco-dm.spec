@@ -16,6 +16,7 @@ Requires:       libadwaita
 Requires:       gobject-introspection
 Recommends:     yt-dlp
 Recommends:     (ffmpeg or ffmpeg-free)
+Recommends:     aria2
 
 %description
 Draco speeds up downloads by splitting files across up to 32 connections, resumes

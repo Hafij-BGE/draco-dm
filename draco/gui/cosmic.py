@@ -198,7 +198,7 @@ class CosmicDashboard(Gtk.Box):
         name = item.get("filename") or item.get("url", "")
         if event == "added":
             self.alerts.appendleft(("folder-download-symbolic", f"Added {name}", time.time()))
-        elif event == "finished" and item.get("status") == "complete":
+        elif event == "finished" and item.get("status") in ("complete", "seeding"):
             self.alerts.appendleft(("draco-m-finished", f"Completed {name}", time.time()))
         elif event == "finished" and item.get("status") == "error":
             self.alerts.appendleft(("dialog-error-symbolic", f"Failed {name}: {item.get('error', '')}", time.time()))

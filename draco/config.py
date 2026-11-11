@@ -109,8 +109,13 @@ DEFAULT_SETTINGS = {
     "antivirus_cmd": "",             # e.g. clamscan --no-summary "{file}"
     "capture_exts": ("3gp 7z aac ace aif apk arj asf avi bin bz2 deb dmg exe flac flv gz gzip iso jar "
                      "lzh m4a m4v mkv mov mp3 mp4 mpeg mpg msi ogg ogv opus pdf pkg rar rpm sit sitx "
-                     "tar tgz wav webm wma wmv xz z zip zst appimage epub"),
+                     "tar tgz wav webm wma wmv xz z zip zst appimage epub torrent"),
     "capture_min_kb": 0,
+    "torrent_seed": True,            # keep sharing a finished torrent (status "seeding") ...
+    "torrent_seed_ratio": 1.0,       # ... until it uploaded this many times its size (0 = no limit)
+    "torrent_seed_minutes": 60,      # ... or for this long (0 = no limit), whichever comes first
+    "torrent_upload_kbps": 0,        # upload limit per torrent, 0 = unlimited
+    "torrent_port": "",              # listening port(s) for peers, e.g. 6881-6999; empty = aria2's default
     "site_logins": [],
     "bridge_tokens": [],             # paired browser extensions (loopback bridge for snap browsers)               # [{"pattern": "example.com", "user": "", "password": ""}]
     "categories": DEFAULT_CATEGORIES,

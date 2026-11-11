@@ -23,7 +23,8 @@ TILES = [
 ]
 STATUS_ICON = {"complete": "draco-m-finished", "error": "dialog-error-symbolic",
                "downloading": "folder-download-symbolic", "connecting": "network-transmit-receive-symbolic",
-               "merging": "emblem-synchronizing-symbolic", "paused": "media-playback-pause-symbolic"}
+               "merging": "emblem-synchronizing-symbolic", "paused": "media-playback-pause-symbolic",
+               "seeding": "send-to-symbolic", "checking": "emblem-synchronizing-symbolic"}
 
 
 class ModernLayout:
@@ -644,7 +645,8 @@ class ModernLayout:
         f = Gtk.SignalListItemFactory()
         classes = {"complete": "draco-status-complete", "error": "draco-status-error",
                    "downloading": "draco-status-active", "connecting": "draco-status-active",
-                   "merging": "draco-status-active"}
+                   "merging": "draco-status-active", "checking": "draco-status-active",
+                   "seeding": "draco-status-complete"}
 
         def setup(f, li):
             box = Gtk.Box(spacing=6)

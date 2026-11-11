@@ -104,10 +104,10 @@ def _preview_box(item):
         pic.set_size_request(-1, 180)
         box.append(pic)
     else:
-        msg = ("Preview is available when the download has finished." if item.get("status") != "complete"
+        msg = ("Preview is available when the download has finished." if item.get("status") not in ("complete", "seeding")
                else "No preview for this file type.")
         box.append(_lbl(msg, css=["bw-key"], wrap=True))
-    if item.get("status") == "complete":
+    if item.get("status") in ("complete", "seeding"):
         b = Gtk.Button(label="Open file", halign=Gtk.Align.START)
         b.connect("clicked", lambda *_: util.open_path(path))
         box.append(b)
@@ -303,7 +303,8 @@ class BrightDetails(Gtk.Box):
         self.url.set_text(it["url"])
         self.ring.set_value(f"{frac * 100:.0f}%", frac)
         self.state.set_text({"downloading": "Downloading…", "connecting": "Connecting…", "merging": "Joining…",
-                             "complete": "Download complete", "error": "Error: " + (it.get("error") or "")}
+                             "complete": "Download complete", "seeding": "Complete · seeding", "checking": "Checking files…",
+                             "error": "Error: " + (it.get("error") or "")}
                             .get(st, st.capitalize()))
         self.bar.set_fraction(frac)
         self.n_done.set_text(fmt_size(it.get("downloaded", 0)) + (f" / {fmt_size(size)}" if size > 0 else ""))
@@ -955,7 +956,8 @@ class BrightProgressWindow(Adw.Window):
         self.vals["source"].set_text(urlsplit(it["url"]).hostname or it["url"])
         self.vals["save"].set_text(str(it.get("save_dir") or ""))
         state = {"downloading": "Downloading…", "connecting": "Connecting…", "merging": "Joining…",
-                 "complete": "Complete", "error": "Error"}.get(st, st.capitalize())
+                 "complete": "Complete", "seeding": "Seeding", "checking": "Checking files…",
+                 "error": "Error"}.get(st, st.capitalize())
         self.vals["state"].set_text(state)
         self.vals["resume"].set_text("Yes" if it.get("resumable") or it.get("kind") in ("hls", "ytdlp") else "No")
         self.speed.set_text(fmt_speed(it.get("speed")) if st == "downloading" else "")
@@ -976,7 +978,7 @@ class BrightProgressWindow(Adw.Window):
         if self.stack.get_visible_child_name() == "connections":
             self.map.queue_draw()
             self._conns(task)
-        if st == "complete":
+        if st in ("complete", "seeding"):
             GLib.timeout_add(1500, lambda: (self.close(), False)[1])
             return False
         return True

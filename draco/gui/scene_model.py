@@ -10,6 +10,7 @@ from dataclasses import dataclass
 # Engine status -> scene state
 _STATES = {"connecting": "connecting", "downloading": "downloading", "merging": "merging",
            "complete": "completed", "error": "error", "queued": "queued",
+           "seeding": "completed", "checking": "merging",
            "paused": "paused", "stopped": "paused"}
 
 STAGES = ("idle", "initializing", "downloading", "highspeed", "finalizing", "completed", "paused", "error")

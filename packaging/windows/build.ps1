@@ -22,7 +22,7 @@ $unix = ($root -replace '\\', '/') -replace '^([A-Za-z]):', '/$1'
 # 2. Freeze the app: dist\Draco\Draco.exe + draco-host.exe
 & $bash -lc "cd '$unix' && python -m PyInstaller --noconfirm --distpath dist --workpath build/pyinstaller packaging/windows/draco.spec"
 
-# 3. Bundle yt-dlp and ffmpeg next to Draco.exe (optional but recommended: YouTube, HLS, subtitles)
+# 3. Bundle yt-dlp, ffmpeg and aria2c next to Draco.exe (optional but recommended: YouTube, HLS, subtitles, torrents)
 $tools = "$root\dist\Draco"
 if (-not (Test-Path "$tools\yt-dlp.exe")) {
     Invoke-WebRequest "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe" -OutFile "$tools\yt-dlp.exe"
@@ -33,11 +33,19 @@ if (-not (Test-Path "$tools\ffmpeg.exe")) {
     Expand-Archive $zip "$env:TEMP\ffmpeg-release" -Force
     Copy-Item (Get-ChildItem "$env:TEMP\ffmpeg-release" -Recurse -Filter ffmpeg.exe | Select-Object -First 1).FullName $tools
 }
+if (-not (Test-Path "$tools\aria2c.exe")) {
+    $zip = "$env:TEMP\aria2.zip"
+    Invoke-WebRequest "https://github.com/aria2/aria2/releases/download/release-1.37.0/aria2-1.37.0-win-64bit-build1.zip" -OutFile $zip
+    Expand-Archive $zip "$env:TEMP\aria2" -Force
+    Copy-Item (Get-ChildItem "$env:TEMP\aria2" -Recurse -Filter aria2c.exe | Select-Object -First 1).FullName $tools
+}
 
 # Licences: Draco, third-party notices (ffmpeg source links) and ffmpeg's own licence file
 Copy-Item "$root\LICENSE", "$root\THIRD_PARTY_NOTICES.md" $tools
 $ffl = Get-ChildItem "$env:TEMP\ffmpeg-release" -Recurse -Filter LICENSE* -ErrorAction SilentlyContinue | Select-Object -First 1
 if ($ffl) { Copy-Item $ffl.FullName "$tools\ffmpeg-LICENSE.txt" }
+$a2l = Get-ChildItem "$env:TEMP\aria2" -Recurse -Filter COPYING -ErrorAction SilentlyContinue | Select-Object -First 1
+if ($a2l) { Copy-Item $a2l.FullName "$tools\aria2-LICENSE.txt" }
 
 # 4. Installer: dist\DracoSetup-<version>.exe
 & $iscc "$root\packaging\windows\installer.iss"

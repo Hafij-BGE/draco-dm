@@ -18,6 +18,7 @@ from ..engine import DownloadError, probe, sanitize_filename  # noqa: E402
 from ..ipc import IpcServer  # noqa: E402
 from ..manager import Manager  # noqa: E402
 from ..media import is_hls  # noqa: E402
+from .. import torrent  # noqa: E402
 from .. import osdeps  # noqa: E402
 from . import style, util  # noqa: E402
 from .dialogs import (AddUrlDialog, BatchDialog, CompleteDialog, CountdownDialog, FileInfoDialog,  # noqa: E402
@@ -242,7 +243,7 @@ class DracoApp(Adw.Application):
 
     def _verify_capture(self, msg):
         url = (msg.get("url") or "").strip()
-        if not util.looks_like_url(url) or is_hls(url):
+        if not util.looks_like_url(url) or is_hls(url) or torrent.is_magnet(url):
             return {"ok": True}
         item = {"url": url, "referer": msg.get("referer", ""), "cookies": msg.get("cookies", ""),
                 "user_agent": msg.get("user_agent", ""), "headers": msg.get("headers") or {}}
@@ -290,7 +291,9 @@ class DracoApp(Adw.Application):
             if self.window:
                 self.window.toast("Download address refreshed")
             return
-        kind = req.get("kind") if req.get("kind") in ("http", "hls", "ffmpeg", "ytdlp") else None
+        kind = req.get("kind") if req.get("kind") in ("http", "hls", "ffmpeg", "ytdlp", "torrent") else None
+        if not kind and torrent.is_torrent_link(url, req.get("content_type", "")):
+            kind = "torrent"
         if not kind and is_hls(url, req.get("content_type", "")):
             kind = "hls"
         item = self.manager.new_item(url, filename=req.get("filename", ""), referer=req.get("referer", ""),
@@ -349,6 +352,9 @@ class DracoApp(Adw.Application):
 
             threading.Thread(target=yt_worker, daemon=True).start()
             return
+        if item["kind"] == "torrent":
+            self._torrent_info(item, req)
+            return
         if item["kind"] != "http":
             self._file_info(item, None, req)
             return
@@ -371,6 +377,12 @@ class DracoApp(Adw.Application):
                             final_url=info["final_url"], content_type=info["content_type"])
                 if is_hls(info["final_url"], info["content_type"]):
                     item["kind"] = "hls"
+                elif torrent.is_torrent_link(info["final_url"], info["content_type"]):
+                    item["kind"] = "torrent"        # a .torrent behind a plain link
+                    if not item["filename"] and info["filename"]:
+                        item["filename"] = torrent.guess_name(info["filename"])
+                    GLib.idle_add(self._torrent_info, item, req)
+                    return
                 if not item["filename"]:
                     item["filename"] = info["filename"]
                 cat = "Video" if item["kind"] == "hls" else self.settings.category_for(item["filename"])
@@ -381,6 +393,35 @@ class DracoApp(Adw.Application):
             GLib.idle_add(self._file_info, item, err, req)
 
         threading.Thread(target=worker, daemon=True).start()
+
+    def _torrent_info(self, item, req):
+        """Magnet link or .torrent: the File Info window lists the files once they are known."""
+        quick = (self.settings["start_immediately"] or req.get("silent")) and not req.get("verify")
+        if quick:                     # the download reads the file list itself and gets every file
+            self.manager.add(item, start=True)
+            if self.settings["show_progress_dialog"]:
+                self.show_progress(item)
+            return False
+        dialog = self._open_file_info(item)
+        if getattr(dialog, "t_fetching", True):     # already reading it (same link added twice)
+            return False
+        dialog.t_fetching = True
+        if not torrent.ARIA2 and torrent.is_magnet(item["url"]):
+            dialog.set_torrent_info(None, torrent.INSTALL_HINT)
+            return False
+        stop = dialog.meta_stop
+
+        def worker():
+            info, err = None, None
+            try:
+                _path, info = torrent.fetch_metadata(dict(item), self.settings, stop, timeout=180)
+            except DownloadError as e:
+                err = str(e)
+            if not stop.is_set():
+                GLib.idle_add(dialog.set_torrent_info, info, err)
+
+        threading.Thread(target=worker, daemon=True).start()
+        return False
 
     def _file_info(self, item, err, req):
         if not item.get("filename"):
@@ -501,7 +542,7 @@ class DracoApp(Adw.Application):
     def _on_event_main(self, event, payload):
         if event in ("changed", "finished"):
             self._update_tray_tooltip()
-        if event == "finished" and payload["status"] == "complete":
+        if event == "finished" and payload["status"] in ("complete", "seeding"):
             it = payload
             if self.settings["notify"]:
                 self._notify_grouped("done", it["filename"])
@@ -600,7 +641,7 @@ class DracoApp(Adw.Application):
             return
         self._clip_seen.add(text)
         from ..grabber import _ext
-        ext = _ext(text).lstrip(".")
+        ext = "torrent" if torrent.is_magnet(text) else _ext(text).lstrip(".")
         if ext in self.settings["capture_exts"].split() or ext == "m3u8":
             self.request_download({"url": text})
 

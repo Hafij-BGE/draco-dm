@@ -20,6 +20,7 @@
       try {
         const abs = new URL(u, location.href);
         if (/^(https?|ftp):$/.test(abs.protocol)) urls.add(abs.href.split("#")[0]);
+        else if (abs.protocol === "magnet:") urls.add(abs.href);
       } catch (e) { /* ignore */ }
     };
     if (selectionOnly && sel && sel.rangeCount) {
@@ -225,4 +226,16 @@
     if (res && res.list && res.list.length) { mediaList = res.list; attachToVideos(); }
   });
   if (isVideoPage()) setTimeout(attachToVideos, 1000);
+
+  // Magnet links: Draco downloads the torrent (Alt+click leaves it to the browser/system).
+  document.addEventListener("click", (ev) => {
+    if (!ev.isTrusted || ev.button !== 0 || ev.altKey || ev.defaultPrevented) return;
+    const a = ev.target instanceof Element && ev.target.closest('a[href^="magnet:" i]');
+    if (!a) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    chrome.runtime.sendMessage({ type: "draco-magnet", url: a.href, title: document.title }, () => {
+      void chrome.runtime.lastError;
+    });
+  }, true);
 })();

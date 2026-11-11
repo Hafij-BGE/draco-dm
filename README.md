@@ -29,6 +29,7 @@ Multi-connection downloads, browser capture and streaming media. No accounts, no
 - ⏯️ **Pause, resume and crash recovery.** Every connection's position is saved, so downloads continue exactly where they stopped, even after a reboot.
 - 🌐 **Browser capture** for Chrome, Edge, Brave, Opera, Vivaldi and Firefox, including snap and Flatpak browsers. Cookies and referrer are passed along, so logged-in downloads work.
 - 🎬 **Media downloads** from the many sites supported by yt-dlp, plus HLS/DASH streams, with the size of every quality shown before you choose.
+- 🧲 **Torrents and magnet links** through aria2: pick the files you want, then pause, resume and seed.
 - 🗂️ **Queues, scheduler, categories, speed limiter**, site grabber, batch downloads and a clipboard watcher.
 - ⏱️ **Starts while you choose.** The download begins in a temp folder the moment the save window opens, and moves to your folder when you click Start Download.
 - 🎨 **31 themes**: 17 picture themes (11 light, 6 dark) with an illustrated header, a live planet that follows the selected download, and a progress window coloured by file type, plus 14 classic themes.
@@ -48,7 +49,7 @@ Get the file for your system from the [**latest release**](https://github.com/Ha
 | **Any Linux with GTK 4 (portable)** | `Draco-<version>-x86_64.AppImage` | `chmod +x Draco-*.AppImage`, then run it |
 | **Anything else** | `draco-dm-<version>-linux.tar.gz` | Unpack, then `./install.sh` (no root needed) |
 
-The Windows installer, AppImage and Flatpak include yt-dlp and ffmpeg. The `.deb` and `.rpm` install them from your distribution as recommended packages. On Arch, install them yourself: `sudo pacman -S yt-dlp ffmpeg`.
+The Windows installer, AppImage and Flatpak include yt-dlp, ffmpeg and aria2. The `.deb` installs aria2 with Draco, and yt-dlp and ffmpeg as recommended packages; the `.rpm` installs all three as recommended packages. On Arch, install them yourself: `sudo pacman -S yt-dlp ffmpeg aria2`.
 
 > [!NOTE]
 > The Linux package is called `draco-dm` because Ubuntu already has an unrelated package named `draco`. The command is still `draco`.
@@ -101,6 +102,18 @@ Closing the window keeps Draco running, with no taskbar entry, so browser downlo
 Draco runs at most two media downloads at once and retries automatically when a site is busy.
 
 > Users are responsible for complying with the terms of service and copyright of the content they download. Draco is a general-purpose download manager and is not affiliated with any website.
+
+## Torrents
+
+Draco downloads torrents with [aria2](https://aria2.github.io), which runs as a separate program.
+
+- **Adding one:** paste a magnet link or a `.torrent` link, open a `.torrent` file, or click a magnet link in the browser while capture is on. Draco also registers itself for `.torrent` files and `magnet:` links.
+- **Choosing files:** the File Info window lists every file in the torrent with its size. Untick the ones you don't want, or rename the top folder. A magnet link first asks other peers for the file list, which can take a little while. For a `.torrent` link, **Only save the .torrent file** downloads just that file.
+- **Pause and resume** work like other downloads. aria2 keeps its place in a `.aria2` file next to the download.
+- **Seeding:** when all chosen files are there, the download counts as finished and keeps sharing (status *Seeding*) until it reaches the ratio or time limit. Set the limits, the upload speed limit and the listening port under **Settings → Connection → Torrents**, or turn seeding off.
+- **Removing** a download that has not finished deletes its partial files. A finished one keeps its files unless you choose to delete them.
+
+The `.torrent` files Draco has read are kept in its data folder (`~/.local/share/draco/torrents`), so resuming never needs the swarm for the file list again.
 
 ## Browser extension
 
@@ -162,6 +175,7 @@ To add your own theme, copy an entry in `BRIGHT` in `draco/gui/bright_style.py` 
 
 ```bash
 draco https://example.org/file.iso        # open the File Info dialog for a link
+draco 'magnet:?xt=urn:btih:…'             # a magnet link or a path to a .torrent file
 draco --now https://example.org/file.iso  # start right away
 draco --background                        # start hidden (used for login autostart)
 draco --status                            # is Draco running?
@@ -181,7 +195,7 @@ python3 -m unittest discover tests
 
 Install for your user only (no root): run `./install.sh`. Add `--autostart` to start hidden at login, and run `./install.sh --uninstall` to remove it. Your settings (`~/.config/draco`) and download list (`~/.local/share/draco`) are kept.
 
-Optional extras: `sudo apt install ffmpeg` for encrypted/live HLS and DASH, and `pipx install yt-dlp` for video sites.
+Optional extras: `sudo apt install ffmpeg` for encrypted/live HLS and DASH, `pipx install yt-dlp` for video sites, and `sudo apt install aria2` for torrents.
 
 Build the packages:
 
@@ -189,7 +203,7 @@ Build the packages:
 sh packaging/linux/build-deb.sh        # dist/draco-dm_<version>_all.deb
 sh packaging/linux/build-rpm.sh        # needs rpmbuild
 sh packaging/linux/build-arch.sh       # on Arch, needs makepkg
-sh packaging/linux/build-appimage.sh   # downloads appimagetool, yt-dlp, ffmpeg into build-cache/
+sh packaging/linux/build-appimage.sh   # downloads appimagetool, yt-dlp, ffmpeg, aria2c into build-cache/
 sh packaging/linux/build-tarball.sh
 ```
 
@@ -202,6 +216,7 @@ sh packaging/linux/build-tarball.sh
 ```
 draco/engine.py      multi-connection HTTP/FTP engine, dynamic segmentation, rate limiter
 draco/media.py       HLS downloader, ffmpeg and yt-dlp bridges
+draco/torrent.py     torrents and magnet links (.torrent parsing, aria2c over JSON-RPC)
 draco/manager.py     download list, queues, scheduler, persistence
 draco/grabber.py     site crawler            draco/batch.py    batch pattern expansion
 draco/ipc.py         single instance + CLI (Unix socket, or TCP with a token on Windows)
@@ -220,10 +235,12 @@ To change the app icon, replace `data/draco-source.png` and run `python3 tools/m
 ## Privacy and limits
 
 - Draco makes no network requests of its own: no telemetry, no update checks, no ads.
+- Torrents, like every BitTorrent client, show your IP address to the other peers and to the trackers. Draco also uses DHT and local peer discovery to find peers.
 - The download list can hold cookies, so it is stored with file mode `600`. Site logins in `settings.json` are also mode `600`, but not encrypted.
 - On Wayland, the clipboard watcher only sees new links while Draco's window has focus. This is a desktop security rule, not a bug.
 - FTP downloads use a single connection.
 - DRM-protected streams (Netflix and similar) are not supported.
+- Torrents need aria2. BitTorrent v2-only torrents (without v1 data) are not supported.
 
 ## License
 
@@ -231,6 +248,6 @@ Draco Download Manager © 2026 **Md Hafijur Rahman**, licensed under the [GPL-3.
 
 This app was generated with AI. Developer support may not be available.
 
-Third-party software bundled in some packages (ffmpeg, yt-dlp) and the libraries Draco uses are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), including links to the ffmpeg source code.
+Third-party software bundled in some packages (ffmpeg, yt-dlp, aria2) and the libraries Draco uses are listed in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md), including links to the ffmpeg source code.
 
 Users are responsible for complying with the terms of service and copyright of the content they download.

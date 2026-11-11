@@ -12,6 +12,7 @@ from gi.repository import Adw, Gdk, GLib, Gtk  # noqa: E402
 from .. import batch as batchmod  # noqa: E402
 from ..grabber import SiteGrabber  # noqa: E402
 from ..media import YTDLP  # noqa: E402
+from .. import torrent as torrentmod  # noqa: E402
 from . import util  # noqa: E402
 from .util import fmt_size, fmt_time  # noqa: E402
 
@@ -202,11 +203,14 @@ class FileInfoDialog(Dialog):
             info = "Video page — downloaded with yt-dlp"
         elif item.get("kind") == "hls":
             info = "Streaming video (HLS) — joined into one file"
+        elif item.get("kind") == "torrent":
+            info = "BitTorrent"
         elif item.get("probed"):
             info += "   ·   resume " + ("supported" if item.get("resumable") else "NOT supported")
         side = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6, valign=Gtk.Align.START,
                        margin_start=8, width_request=110)
-        side.append(Gtk.Image(gicon=util.icon_for_file(item["filename"] or "x.bin"), pixel_size=64))
+        icon_name = "x.torrent" if item.get("kind") == "torrent" else (item["filename"] or "x.bin")
+        side.append(Gtk.Image(gicon=util.icon_for_file(icon_name), pixel_size=64))
         self.side_info = util.label(info, xalign=0.5, wrap=True)
         side.append(self.side_info)
         top = Gtk.Box(spacing=12)
@@ -234,6 +238,13 @@ class FileInfoDialog(Dialog):
         if YTDLP and item.get("kind") == "http":
             self.ytdlp = Gtk.CheckButton(label="Treat as video page and download with yt-dlp")
             self.body.append(self.ytdlp)
+        self.t_info = None
+        self.t_checks = []
+        self.t_only_file = None
+        self.meta_stop = threading.Event()        # closing the window stops reading a magnet's file list
+        self.t_fetching = item.get("kind") != "torrent"
+        if item.get("kind") == "torrent":
+            self._build_torrent()
         if error:
             err = util.label(f"Could not query the server: {error}", wrap=True, css=["error"])
             self.body.append(err)
@@ -321,6 +332,124 @@ class FileInfoDialog(Dialog):
                                                     css=["error"]), self.subs_check)
         return False
 
+    # -- torrents -------------------------------------------------------------
+    def _build_torrent(self):
+        it = self.item
+        self.t_guess = it.get("filename") or ""
+        head = Gtk.Box(spacing=8)
+        head.append(util.label("Files", css=["dim-label"], ellipsize=False))
+        self.t_spinner = Gtk.Spinner(spinning=True)
+        head.append(self.t_spinner)
+        self.t_status = util.label("Getting the file list…" if torrentmod.is_magnet(it["url"])
+                                   else "Reading the torrent…", xalign=0, css=["dim-label"])
+        self.t_status.set_hexpand(True)
+        head.append(self.t_status)
+        self.t_all = Gtk.Button(label="All", sensitive=False)
+        self.t_none = Gtk.Button(label="None", sensitive=False)
+        for b, on in ((self.t_all, True), (self.t_none, False)):
+            b.add_css_class("flat")
+            b.connect("clicked", lambda _b, v=on: self._t_select_all(v))
+            head.append(b)
+        self.body.append(head)
+        self.t_list = Gtk.ListBox(selection_mode=Gtk.SelectionMode.NONE)
+        self.t_list.add_css_class("boxed-list")
+        self.t_scroll = Gtk.ScrolledWindow(child=self.t_list, min_content_height=60, max_content_height=220,
+                                           propagate_natural_height=True, visible=False,
+                                           hscrollbar_policy=Gtk.PolicyType.NEVER)
+        self.body.append(self.t_scroll)
+        url = it["url"].lower()
+        if url.startswith(("http://", "https://")):
+            self.t_only_file = Gtk.CheckButton(label="Only save the .torrent file (don't download what it holds)",
+                                               active=not torrentmod.ARIA2)
+            self.t_only_file.connect("toggled", lambda *_: self._t_changed())
+            self.body.append(self.t_only_file)
+        if not torrentmod.ARIA2:
+            self.body.append(util.label(torrentmod.INSTALL_HINT + " — then restart Draco.", wrap=True, css=["error"]))
+        self._t_changed()
+
+    def set_torrent_info(self, info, error=None):
+        """Called when the torrent's file list is known (the window is already open)."""
+        self.t_spinner.stop()
+        self.t_spinner.set_visible(False)
+        if error or not info:
+            self.t_status.set_text("")
+            self.body.insert_child_after(util.label(f"Could not get the file list: {error}", wrap=True,
+                                                    css=["error"]), self.t_scroll)
+            return False
+        self.t_info = info
+        self.item["torrent_file"] = str(torrentmod.TORRENT_DIR / f"{info['info_hash']}.torrent")
+        self.item["info_hash"] = info["info_hash"]
+        n = sum(1 for f in info["files"] if not f["pad"])
+        self.t_status.set_text(f"{n} file{'s' if n != 1 else ''}, {fmt_size(info['size'])}"
+                               + ("   ·   private torrent" if info.get("private") else ""))
+        chosen = set(self.item.get("torrent_select") or [])
+        root = info["name"] + "/"
+        for i, f in enumerate(info["files"], 1):
+            if f["pad"]:
+                continue
+            shown = f["path"][len(root):] if f["path"].startswith(root) else f["path"]
+            c = Gtk.CheckButton(active=not chosen or i in chosen, margin_start=8, margin_end=8,
+                                margin_top=2, margin_bottom=2)
+            row = Gtk.Box(spacing=8)
+            row.append(util.label(shown, xalign=0, ellipsize=True))
+            row.get_first_child().set_hexpand(True)
+            row.append(util.label(fmt_size(f["size"]), css=["dim-label"], ellipsize=False))
+            c.set_child(row)
+            c.set_tooltip_text(shown)
+            c.connect("toggled", lambda *_: self._t_changed())
+            self.t_checks.append((i, c))
+            self.t_list.append(c)
+        # show up to five rows without scrolling (the dialog grows to fit)
+        self.t_scroll.set_min_content_height(min(len(self.t_checks), 5) * 36 + 4)
+        self.t_scroll.set_visible(True)
+        many = len(self.t_checks) > 1
+        self.t_all.set_sensitive(many)
+        self.t_none.set_sensitive(many)
+        # the torrent names the top folder (or the file); keep a name the user already typed
+        p = Path(self.path.get_text())
+        if p.name == self.t_guess:
+            self.path.set_text(str(p.with_name(info["name"])))
+        self._t_changed()
+        return False
+
+    def _t_select_all(self, on):
+        for _i, c in self.t_checks:
+            c.set_active(on)
+
+    def _t_changed(self):
+        only = bool(self.t_only_file and self.t_only_file.get_active())
+        self.t_list.set_sensitive(not only)
+        lines = ["BitTorrent" if not only else "Only the .torrent file"]
+        if self.t_info and not only:
+            files = self.t_info["files"]
+            chosen = [i for i, c in self.t_checks if c.get_active()]
+            lines.append(f"{len(chosen)} of {len(self.t_checks)} files")
+            lines.append(fmt_size(sum(files[i - 1]["size"] for i in chosen)))
+        elif not only:
+            lines.append("Reading the file list…")
+        self.side_info.set_text("\n".join(lines))
+
+    def _t_apply(self):
+        """Store the torrent choices on the item; False when nothing was chosen."""
+        it = self.item
+        if self.t_only_file and self.t_only_file.get_active():
+            it["kind"] = "http"
+            name = it["filename"] if it["filename"].lower().endswith(".torrent") else it["filename"] + ".torrent"
+            it["filename"] = util_sanitize(name)
+            return True
+        if self.t_info:
+            chosen = [i for i, c in self.t_checks if c.get_active()]
+            if not chosen:
+                self.t_status.set_text("Choose at least one file")
+                self.t_status.add_css_class("error")
+                return False
+            it["torrent_select"] = [] if len(chosen) == len(self.t_checks) else chosen
+            it["torrent_named"] = True           # the name in Save As is the top folder (or file)
+            it["size"] = sum(self.t_info["files"][i - 1]["size"] for i in chosen)
+        elif it["filename"] != self.t_guess:
+            it["torrent_rename"] = it["filename"]   # file list not known yet: use this name for it
+        return True
+
     def _show_where(self):
         """Say plainly which folder the file goes to, so it can be checked before starting."""
         folder = Path(self.path.get_text()).expanduser().parent
@@ -382,6 +511,7 @@ class FileInfoDialog(Dialog):
         if self._early_timer:
             GLib.source_remove(self._early_timer)
             self._early_timer = 0
+        self.meta_stop.set()
         if not self._confirmed and self.item.get("early"):
             # cancelled or closed without confirming: stop the early copy and delete it
             threading.Thread(target=self.app.manager.discard_early, args=(self.item["id"],), daemon=True).start()
@@ -466,6 +596,8 @@ class FileInfoDialog(Dialog):
         if self.ytdlp and self.ytdlp.get_active():
             it["kind"] = "ytdlp"
             it["filename"] = ""
+        if it.get("kind") == "torrent" and not self._t_apply():
+            return
         if self.quality is not None:
             it["ytdlp_quality"] = self.q_values[self.quality.get_selected()]
             it["subs"] = self.subs_check.get_active() and it["ytdlp_quality"] not in ("audio", "subs")

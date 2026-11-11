@@ -14,7 +14,7 @@ from gi.repository import Gio, GLib, Gtk  # noqa: E402
 STATUS_TEXT = {
     "stopped": "Stopped", "queued": "Queued", "connecting": "Connecting…",
     "downloading": "Downloading", "merging": "Merging…", "paused": "Paused",
-    "error": "Error", "complete": "Complete",
+    "error": "Error", "complete": "Complete", "seeding": "Seeding", "checking": "Checking files…",
 }
 
 CATEGORY_ICONS = {
@@ -86,6 +86,9 @@ def status_text(item):
         return f"{f * 100:.1f}%" if (item.get("size", -1) > 0 or item.get("seg_total")) else fmt_size(item.get("downloaded", 0))
     if st == "error":
         return "Error: " + (item.get("error") or "")
+    if st == "seeding":
+        up = item.get("up_speed") or 0
+        return "Seeding" + (f" ↑ {fmt_speed(up)}" if up else "")
     if st == "paused" and item.get("downloaded"):
         return f"Paused {fraction(item) * 100:.1f}%"
     return STATUS_TEXT.get(st, st)
@@ -112,8 +115,16 @@ def play_complete_sound():
 
 
 def looks_like_url(text):
+    """A web/ftp address, a magnet link, or a .torrent file on this computer."""
     text = (text or "").strip()
-    return text.startswith(("http://", "https://", "ftp://")) and " " not in text and "\n" not in text
+    if "\n" in text:
+        return False
+    if text.lower().startswith("magnet:?"):
+        return "xt=" in text
+    if text.lower().endswith(".torrent") and not text.lower().startswith(("http://", "https://", "ftp://")):
+        from ..torrent import local_torrent
+        return local_torrent(text) is not None
+    return text.startswith(("http://", "https://", "ftp://")) and " " not in text
 
 
 def icon_for_file(filename):

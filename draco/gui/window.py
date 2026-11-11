@@ -439,7 +439,8 @@ class MainWindow(BrightLayout, ModernLayout, Adw.ApplicationWindow):
         f.connect("setup", lambda f, li: li.set_child(util.label()))
         classes = {"complete": "draco-status-complete", "error": "draco-status-error",
                    "downloading": "draco-status-active", "connecting": "draco-status-active",
-                   "merging": "draco-status-active"}
+                   "merging": "draco-status-active", "checking": "draco-status-active",
+                   "seeding": "draco-status-complete"}
 
         def bind(f, li):
             obj, lb = li.get_item(), li.get_child()
@@ -582,7 +583,7 @@ class MainWindow(BrightLayout, ModernLayout, Adw.ApplicationWindow):
         self.app.settings.save()
 
     def _open_with(self, it):
-        if it["status"] != "complete":
+        if it["status"] not in ("complete", "seeding"):
             return
         launcher = Gtk.FileLauncher(file=Gio.File.new_for_path(str(util.file_path(it))), always_ask=True)
         launcher.launch(self, None, None)
@@ -595,7 +596,7 @@ class MainWindow(BrightLayout, ModernLayout, Adw.ApplicationWindow):
         self.app.show_batch(text if util.looks_like_url(text) else "")
 
     def _start_one(self, it):
-        if it["status"] == "complete":
+        if it["status"] in ("complete", "seeding"):
             return
         if self.manager.start(it["id"]) and self.app.settings["show_progress_dialog"]:
             self.app.show_progress(it)
@@ -702,7 +703,7 @@ class MainWindow(BrightLayout, ModernLayout, Adw.ApplicationWindow):
         if not obj:
             return
         it = obj.item
-        if it["status"] == "complete":
+        if it["status"] in ("complete", "seeding"):
             util.open_path(util.file_path(it))
         elif not self.open_detail(it, pin=True):
             self.app.show_progress(it)
@@ -761,7 +762,7 @@ class MainWindow(BrightLayout, ModernLayout, Adw.ApplicationWindow):
         if text and text not in (it.get("filename") or "").lower() and text not in it["url"].lower():
             return False
         if self.layout == "modern" and self.tab_key != "all":
-            if self.tab_key == "completed" and it["status"] != "complete":
+            if self.tab_key == "completed" and it["status"] not in ("complete", "seeding"):
                 return False
             if self.tab_key == "downloading" and it["status"] not in ACTIVE:
                 return False

@@ -2,7 +2,7 @@
 const HOST = "io.github.draco";
 const DEFAULT_EXTS = ("3gp 7z aac ace aif apk arj asf avi bin bz2 deb dmg exe flac flv gz gzip iso jar " +
   "lzh m4a m4v mkv mov mp3 mp4 mpeg mpg msi ogg ogv opus pdf pkg rar rpm sit sitx tar tgz wav webm wma " +
-  "wmv xz z zip zst appimage epub").split(" ");
+  "wmv xz z zip zst appimage epub torrent").split(" ");
 const MEDIA_TYPES = /^(video\/|audio\/)|mpegurl|dash\+xml/i;
 const STREAM_EXT = /\.(m3u8|mpd)(\?|$)/i;
 const SEGMENT_EXT = /\.(ts|m4s|m4a|aac|vtt|webvtt|key)(\?|$)/i;
@@ -502,6 +502,13 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
         subs: msg.kind === "ytdlp" ? (msg.subs !== undefined ? msg.subs : state.subs) : undefined,
         sub_lang: SUB_LANG,
       }));
+    } else if (msg.type === "draco-magnet") {
+      // a clicked magnet link: to Draco when capturing is on, else (or if Draco can't take it) as usual
+      const tab = sender.tab;
+      let res = null;
+      if (state.capture) res = await sendToDraco(msg.url, { referer: (tab && tab.url) || "", silent: state.quick });
+      if (!(res && res.ok) && tab) chrome.tabs.update(tab.id, { url: msg.url });
+      reply(res || { ok: false });
     } else if (msg.type === "draco-media-list") {
       const tabId = msg.tabId ?? (sender.tab && sender.tab.id);
       reply({ list: media[tabId] || [] });

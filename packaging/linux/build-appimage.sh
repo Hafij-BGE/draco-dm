@@ -1,5 +1,5 @@
 #!/bin/sh
-# Build dist/Draco-<version>-x86_64.AppImage: one portable file with Draco, yt-dlp and a static ffmpeg.
+# Build dist/Draco-<version>-x86_64.AppImage: one portable file with Draco, yt-dlp, a static ffmpeg and aria2c.
 # It uses the system's Python 3 + GTK 4 + libadwaita (standard on GNOME/Ubuntu 23.10+/Fedora 39+);
 # if they're missing it says how to install them. Downloads tools into build-cache/ the first time.
 set -e
@@ -14,6 +14,7 @@ rm -rf "$APPDIR"
 sh "$SRC/packaging/linux/stage.sh" "$APPDIR" /usr
 install -m755 "$CACHE/yt-dlp" "$APPDIR/usr/bin/yt-dlp"
 install -m755 "$CACHE/ffmpeg" "$APPDIR/usr/bin/ffmpeg"
+install -m755 "$CACHE/aria2c" "$APPDIR/usr/bin/aria2c"
 
 cp "$APPDIR/usr/share/applications/$APPID.desktop" "$APPDIR/$APPID.desktop"
 sed -i "s|^Exec=.*|Exec=draco %U|" "$APPDIR/$APPID.desktop"
@@ -23,7 +24,7 @@ ln -sf "$APPID.png" "$APPDIR/.DirIcon"
 cat > "$APPDIR/AppRun" <<'RUN'
 #!/bin/sh
 HERE=$(dirname "$(readlink -f "$0")")
-export PATH="$HERE/usr/bin:$PATH"                    # bundled yt-dlp + ffmpeg
+export PATH="$HERE/usr/bin:$PATH"                    # bundled yt-dlp, ffmpeg, aria2c
 export DRACO_LAUNCHER="${APPIMAGE:-$HERE/AppRun}"     # browser helper / autostart start this file
 if ! python3 -c 'import gi; gi.require_version("Gtk", "4.0"); gi.require_version("Adw", "1"); from gi.repository import Adw' 2>/dev/null; then
     msg="Draco needs Python 3 with GTK 4 and libadwaita.

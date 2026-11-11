@@ -73,6 +73,7 @@ def _selftest():
     check("GUI modules", lambda: __import__("draco.gui.app", fromlist=["x"]) and "import ok")
     check("yt-dlp", lambda: osdeps.which("yt-dlp") or "not found (optional)")
     check("ffmpeg", lambda: osdeps.which("ffmpeg") or "not found (optional)")
+    check("aria2c", lambda: osdeps.which("aria2c") or "not found (optional, for torrents)")
     print("SELFTEST OK" if ok else "SELFTEST FAILED")
     return 0 if ok else 1
 
@@ -122,7 +123,10 @@ def main(argv=None):
             print("removed", p)
         return 0
 
-    msgs = [{"cmd": "add", "url": u, "referer": args.referer, "silent": args.now} for u in args.urls]
+    def _arg(u):          # a .torrent file named on the command line: the running Draco needs its full path
+        return os.path.abspath(u) if "://" not in u and ":?" not in u and os.path.isfile(u) else u
+
+    msgs = [{"cmd": "add", "url": _arg(u), "referer": args.referer, "silent": args.now} for u in args.urls]
     from . import osdeps
     if osdeps.IS_WIN and not args.status and not _win_claim_instance():
         import time

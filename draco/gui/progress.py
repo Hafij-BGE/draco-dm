@@ -17,6 +17,7 @@ from .widgets import SegmentMap, Sparkline  # noqa: E402,F401  (SegmentMap: kept
 STATUS_LINE = {
     "connecting": "Connecting…", "downloading": "Receiving data…", "merging": "Joining segments…",
     "paused": "Paused", "stopped": "Stopped", "queued": "Waiting in queue", "complete": "Download complete",
+    "seeding": "Download complete · sharing with others", "checking": "Checking the files already there…",
 }
 
 

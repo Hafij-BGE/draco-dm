@@ -3,10 +3,11 @@
 ; Installs per user (no admin prompt) to %LOCALAPPDATA%\Programs\Draco.
 
 #ifndef AppVersion
-  #define AppVersion "1.8.7"
+  #define AppVersion "1.9.0"
 #endif
 
 [Setup]
+ChangesAssociations=yes
 AppId={{6D1F2B8A-4C1E-4E0B-9C59-D7A0C0A0D2A1}
 AppName=Draco Download Manager
 AppVersion={#AppVersion}
@@ -29,6 +30,7 @@ MinVersion=10.0.17763
 
 [Tasks]
 Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription: "Shortcuts:"
+Name: "torrents"; Description: "Open .torrent files and magnet links with Draco"; GroupDescription: "Options:"
 Name: "autostart"; Description: "Start Draco when I sign in (needed for scheduled queues)"; GroupDescription: "Options:"; Flags: unchecked
 
 [Files]
@@ -40,6 +42,16 @@ Name: "{autodesktop}\Draco Download Manager"; Filename: "{app}\Draco.exe"; Tasks
 
 [Registry]
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: string; ValueName: "Draco"; ValueData: """{app}\Draco.exe"" --background"; Tasks: autostart; Flags: uninsdeletevalue
+; Torrents: .torrent files and magnet: links (per user, removed on uninstall)
+Root: HKCU; Subkey: "Software\Classes\DracoDM.torrent"; ValueType: string; ValueName: ""; ValueData: "Torrent file"; Tasks: torrents; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Classes\DracoDM.torrent\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\Draco.exe,0"; Tasks: torrents
+Root: HKCU; Subkey: "Software\Classes\DracoDM.torrent\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\Draco.exe"" ""%1"""; Tasks: torrents
+Root: HKCU; Subkey: "Software\Classes\.torrent"; ValueType: string; ValueName: ""; ValueData: "DracoDM.torrent"; Tasks: torrents; Flags: uninsdeletevalue
+Root: HKCU; Subkey: "Software\Classes\.torrent\OpenWithProgids"; ValueType: string; ValueName: "DracoDM.torrent"; ValueData: ""; Tasks: torrents; Flags: uninsdeletevalue
+Root: HKCU; Subkey: "Software\Classes\magnet"; ValueType: string; ValueName: ""; ValueData: "URL:Magnet link"; Tasks: torrents; Flags: uninsdeletekey
+Root: HKCU; Subkey: "Software\Classes\magnet"; ValueType: string; ValueName: "URL Protocol"; ValueData: ""; Tasks: torrents
+Root: HKCU; Subkey: "Software\Classes\magnet\DefaultIcon"; ValueType: string; ValueName: ""; ValueData: "{app}\Draco.exe,0"; Tasks: torrents
+Root: HKCU; Subkey: "Software\Classes\magnet\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\Draco.exe"" ""%1"""; Tasks: torrents
 
 [Run]
 ; Registers the browser helper (per-user registry keys) and copies the extension to Documents.

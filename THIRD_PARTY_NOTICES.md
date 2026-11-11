@@ -27,6 +27,19 @@ bundles the following third-party software.
 - <https://github.com/yt-dlp/yt-dlp>, licence: The Unlicense (public domain).
 - Used as a separate program to read media pages on the sites it supports.
 
+## aria2 (bundled in the Windows installer, AppImage and Flatpak)
+
+- Project: aria2, <https://aria2.github.io>. Licence: **GNU General Public License v2.0 or later**,
+  with an exception that allows linking with OpenSSL.
+- Draco runs aria2c as a separate program (`aria2c` / `aria2c.exe`) for torrents and magnet links;
+  it is not linked into Draco.
+- Where the bundled binaries come from, and where their **source code** is:
+  - Linux (AppImage, Flatpak): static builds by abcfy2, <https://github.com/abcfy2/aria2-static-build>
+    (build scripts at the same address).
+  - Windows: the official 1.37.0 release build, <https://github.com/aria2/aria2/releases/tag/release-1.37.0>.
+  - Upstream source code: <https://github.com/aria2/aria2> (release tarballs on the releases page).
+- The `.deb`, `.rpm` and Arch packages do not bundle aria2; they use the one from your distribution.
+
 ## GTK 4, libadwaita, PyGObject, Python
 
 - GTK 4 and libadwaita: LGPL-2.1-or-later, <https://gtk.org>, <https://gnome.pages.gitlab.gnome.org/libadwaita/>.

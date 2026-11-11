@@ -46,17 +46,22 @@ jobs:
       - name: Build Draco.exe and draco-host.exe
         run: python -m PyInstaller --noconfirm --distpath dist --workpath build/pyinstaller packaging/windows/draco.spec
 
-      - name: Bundle yt-dlp and ffmpeg
+      - name: Bundle yt-dlp, ffmpeg and aria2c
         shell: pwsh
         run: |
           Invoke-WebRequest "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp.exe" -OutFile "dist/Draco/yt-dlp.exe"
           Invoke-WebRequest "https://www.gyan.dev/ffmpeg/builds/ffmpeg-release-essentials.zip" -OutFile "ffmpeg.zip"
           Expand-Archive "ffmpeg.zip" "ffmpeg" -Force
           Copy-Item (Get-ChildItem "ffmpeg" -Recurse -Filter ffmpeg.exe | Select-Object -First 1).FullName "dist/Draco/"
+          Invoke-WebRequest "https://github.com/aria2/aria2/releases/download/release-1.37.0/aria2-1.37.0-win-64bit-build1.zip" -OutFile "aria2.zip"
+          Expand-Archive "aria2.zip" "aria2" -Force
+          Copy-Item (Get-ChildItem "aria2" -Recurse -Filter aria2c.exe | Select-Object -First 1).FullName "dist/Draco/"
           # Licences: Draco (GPL-3.0), third-party notices with ffmpeg source links, and ffmpeg's own licence file
           Copy-Item LICENSE, THIRD_PARTY_NOTICES.md "dist/Draco/"
           $ffl = Get-ChildItem "ffmpeg" -Recurse -Filter LICENSE* | Select-Object -First 1
           if ($ffl) { Copy-Item $ffl.FullName "dist/Draco/ffmpeg-LICENSE.txt" }
+          $a2l = Get-ChildItem "aria2" -Recurse -Filter COPYING | Select-Object -First 1
+          if ($a2l) { Copy-Item $a2l.FullName "dist/Draco/aria2-LICENSE.txt" }
 
       - name: Build the installer
         shell: pwsh
@@ -76,9 +81,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Tools
-        run: sudo apt-get update -qq && sudo apt-get install -y -qq rpm desktop-file-utils
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq rpm desktop-file-utils aria2
       - name: Tests
-        run: python3 -m unittest tests.test_engine tests.test_bridge tests.test_windows_paths -v
+        run: python3 -m unittest tests.test_engine tests.test_bridge tests.test_windows_paths tests.test_torrent -v
       - name: .deb, .rpm, .tar.gz, AppImage
         run: |
           sh packaging/linux/build-deb.sh
