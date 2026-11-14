@@ -115,7 +115,9 @@ DEFAULT_SETTINGS = {
     "torrent_seed_ratio": 1.0,       # ... until it uploaded this many times its size (0 = no limit)
     "torrent_seed_minutes": 60,      # ... or for this long (0 = no limit), whichever comes first
     "torrent_upload_kbps": 0,        # upload limit per torrent, 0 = unlimited
-    "torrent_port": "",              # listening port(s) for peers, e.g. 6881-6999; empty = aria2's default
+    "torrent_port": "",              # listening port(s) for peers, e.g. 6881-6999; empty = this install's own port
+    "torrent_upnp": True,            # open that port on the router (UPnP) so peers can connect to us
+    "torrent_public_trackers": True, # add well-known open trackers to public torrents and magnets
     "site_logins": [],
     "bridge_tokens": [],             # paired browser extensions (loopback bridge for snap browsers)               # [{"pattern": "example.com", "user": "", "password": ""}]
     "categories": DEFAULT_CATEGORIES,

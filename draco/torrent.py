@@ -30,10 +30,18 @@ from .config import DATA_DIR
 from .engine import DownloadError, build_headers, build_opener, open_url, sanitize_filename
 from .media import _TaskBase
 from .osdeps import IS_WIN, popen_kwargs, which
+from .upnp import MAPPER
 
 ARIA2 = which("aria2c")
 TORRENT_DIR = DATA_DIR / "torrents"
 MAX_TORRENT_FILE = 32 * 1024 * 1024
+DHT_BOOTSTRAP = "dht.transmissionbt.com:6881"
+# Well-known open trackers added to public torrents and magnet links (never to private ones):
+# a magnet with one dead tracker otherwise finds few or no peers.
+PUBLIC_TRACKERS = ("udp://tracker.opentrackr.org:1337/announce", "udp://open.demonii.com:1337/announce",
+                   "udp://open.stealth.si:80/announce", "udp://tracker.torrent.eu.org:451/announce",
+                   "udp://exodus.desync.com:6969/announce", "udp://explodie.org:6969/announce",
+                   "udp://tracker.dler.org:6969/announce", "udp://opentracker.io:6969/announce")
 INSTALL_HINT = ("Torrents need aria2c.exe next to Draco.exe (reinstall Draco)" if IS_WIN
                 else "Torrents need aria2 (sudo apt install aria2)")
 
@@ -212,11 +220,127 @@ def _free_port():
         return s.getsockname()[1]
 
 
-def _base_opts():
+_PORTS_LOCK = threading.Lock()
+_PORTS_USED = set()
+
+
+def _peer_port_free(port):
+    for kind in (socket.SOCK_STREAM, socket.SOCK_DGRAM):
+        with socket.socket(socket.AF_INET, kind) as s:
+            try:
+                s.bind(("0.0.0.0", port))
+            except OSError:
+                return False
+    return True
+
+
+def _home_port():
+    """This install's own peer port: picked once at random, so the router mapping, other peers and
+    the DHT can keep finding it, without clashing with another torrent app on the same network."""
+    f = TORRENT_DIR / "port"
+    try:
+        port = int(f.read_text().strip())
+        if 1024 < port < 65000:
+            return port
+    except (OSError, ValueError):
+        pass
+    port = 20000 + secrets.randbelow(40000)
+    try:
+        TORRENT_DIR.mkdir(parents=True, exist_ok=True)
+        f.write_text(str(port))
+    except OSError:
+        pass
+    return port
+
+
+class PeerPort:
+    """One TCP+UDP port for one aria2 process, opened on the router (UPnP) while it is held."""
+
+    def __init__(self, settings):
+        s = settings or {}
+        want = str(s.get("torrent_port", "") or "").strip()
+        m = re.fullmatch(r"(\d{2,5})(?:-(\d{2,5}))?", want)
+        if m:
+            lo = int(m.group(1))
+            hi = max(lo, int(m.group(2) or lo))
+        else:
+            lo = _home_port()
+            hi = lo + 49
+        self.port = None
+        with _PORTS_LOCK:
+            for p in range(lo, min(hi, 65535) + 1):
+                if p not in _PORTS_USED and _peer_port_free(p):
+                    self.port = p
+                    _PORTS_USED.add(p)
+                    break
+        self._held = []
+        if self.port and s.get("torrent_upnp", True):
+            self._held = [(self.port, "TCP"), (self.port, "UDP")]
+            MAPPER.hold(self._held)
+
+    def close(self):
+        if self._held:
+            MAPPER.release(self._held)
+            self._held = []
+        with _PORTS_LOCK:
+            _PORTS_USED.discard(self.port)
+
+
+_RPC_OPENER = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+
+
+def rpc_call(port, secret, method, *params):
+    """One aria2 JSON-RPC call on 127.0.0.1; None when aria2 isn't answering."""
+    body = json.dumps({"jsonrpc": "2.0", "id": "draco", "method": method,
+                       "params": [f"token:{secret}", *params]}).encode()
+    req = urllib.request.Request(f"http://127.0.0.1:{port}/jsonrpc", body, {"Content-Type": "application/json"})
+    try:
+        with _RPC_OPENER.open(req, timeout=3) as r:
+            return json.loads(r.read().decode()).get("result")
+    except (OSError, ValueError):
+        return None
+
+
+def _rpc_opts(port, secret):
+    return ["--enable-rpc=true", "--rpc-listen-all=false", f"--rpc-listen-port={port}", f"--rpc-secret={secret}"]
+
+
+def peer_rows(peers, num_pieces=0):
+    """aria2.getPeers result -> [{'addr', 'down', 'up', 'have' (0..1 or None), 'seeder', 'choked'}]."""
+    out = []
+    for p in peers or []:
+        try:
+            have = None
+            bf = p.get("bitfield") or ""
+            if num_pieces > 0 and bf:
+                have = min(1.0, sum(bin(int(c, 16)).count("1") for c in bf) / num_pieces)
+            ip = p.get("ip", "")
+            out.append({"addr": (f"[{ip}]" if ":" in ip else ip) + f":{p.get('port', '')}",
+                        "down": int(p.get("downloadSpeed") or 0), "up": int(p.get("uploadSpeed") or 0),
+                        "have": 1.0 if p.get("seeder") == "true" else have,
+                        "seeder": p.get("seeder") == "true", "choked": p.get("peerChoking") == "true"})
+        except (TypeError, ValueError):
+            continue
+    out.sort(key=lambda r: (-r["down"], -r["up"], r["addr"]))
+    return out
+
+
+def _base_opts(peer_port=None, settings=None, private=False):
     TORRENT_DIR.mkdir(parents=True, exist_ok=True)
-    return ["--console-log-level=error", "--summary-interval=0", "--enable-color=false",
+    s = settings or {}
+    extra = []
+    if peer_port:            # TCP for peers and UDP for DHT on one known port, so the router can open it
+        extra += [f"--listen-port={peer_port}", f"--dht-listen-port={peer_port}"]
+    if not private and s.get("torrent_public_trackers", True):
+        extra.append("--bt-tracker=" + ",".join(PUBLIC_TRACKERS))
+    # keep looking for more peers until the torrent is really fast (aria2 stops at 50 KB/s)
+    extra += ["--bt-max-peers=100", "--bt-request-peer-speed-limit=10M"]
+    return extra + ["--console-log-level=error", "--summary-interval=0", "--enable-color=false",
             "--download-result=hide", f"--stop-with-process={os.getpid()}",
             "--enable-dht=true", f"--dht-file-path={TORRENT_DIR / 'dht.dat'}", "--bt-enable-lpd=true",
+            # aria2 has no built-in DHT bootstrap: without one, an empty dht.dat stays empty and a magnet
+            # whose trackers give no reachable peers never gets its file list
+            f"--dht-entry-point={DHT_BOOTSTRAP}",
             "--follow-torrent=false", "--file-allocation=none", "--auto-file-renaming=false"]
 
 
@@ -237,7 +361,7 @@ def _error_text(lines, rc):
     return _ERRORS.get(str(rc), f"aria2 stopped (exit code {rc})")
 
 
-def fetch_metadata(item, settings, stop_event=None, timeout=180, on_proc=None):
+def fetch_metadata(item, settings, stop_event=None, timeout=180, on_proc=None, on_status=None):
     """Make sure the item has its .torrent; returns (path, info). Raises DownloadError."""
     stop_event = stop_event or threading.Event()
     if item.get("torrent_file") and Path(item["torrent_file"]).is_file():
@@ -251,7 +375,7 @@ def fetch_metadata(item, settings, stop_event=None, timeout=180, on_proc=None):
         if local:
             data = local.read_bytes()[:MAX_TORRENT_FILE + 1]
         elif is_magnet(url):
-            data = _magnet_metadata(url, stop_event, timeout, on_proc)
+            data = _magnet_metadata(url, stop_event, timeout, on_proc, on_status, settings)
         else:
             resp = open_url(build_opener(settings), item.get("final_url") or url,
                             build_headers(item, settings), settings["timeout"])
@@ -267,7 +391,16 @@ def fetch_metadata(item, settings, stop_event=None, timeout=180, on_proc=None):
     return path, info
 
 
-def _magnet_metadata(url, stop_event, timeout, on_proc=None):
+def _complete_torrent(path):
+    try:
+        parse_torrent(path.read_bytes())
+        return True
+    except (OSError, ValueError):
+        return False           # still being written
+
+
+def _magnet_metadata(url, stop_event, timeout, on_proc=None, on_status=None, settings=None):
+    """The .torrent of a magnet link, from the peers. on_status(peers, seeds, peer_rows) while waiting."""
     if not ARIA2:
         raise DownloadError(INSTALL_HINT)
     ih, _dn = magnet_info(url)
@@ -275,33 +408,64 @@ def _magnet_metadata(url, stop_event, timeout, on_proc=None):
         return (TORRENT_DIR / f"{ih}.torrent").read_bytes()
     work = TORRENT_DIR / f".meta-{secrets.token_hex(4)}"
     work.mkdir(parents=True, exist_ok=True)
-    cmd = [ARIA2] + _base_opts() + ["--bt-metadata-only=true", "--bt-save-metadata=true",
-                                    "--seed-time=0", f"--dir={work}", url]
-    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
-                            encoding="utf-8", errors="replace", **popen_kwargs())
+    port, secret = _free_port(), secrets.token_hex(16)
+    peer = PeerPort(settings)
+    cmd = [ARIA2] + _base_opts(peer.port, settings) + _rpc_opts(port, secret) + [
+        "--bt-metadata-only=true", "--bt-save-metadata=true", "--seed-time=0", f"--dir={work}", url]
+    try:
+        proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
+                                encoding="utf-8", errors="replace", **popen_kwargs())
+    except OSError:
+        peer.close()
+        raise
     if on_proc:
         on_proc(proc)
     lines = []
     threading.Thread(target=lambda: [lines.append(x) for x in proc.stdout], daemon=True).start()
     try:
         end = time.monotonic() + timeout
+        next_poll = 0.0
         while proc.poll() is None:
             if stop_event.wait(0.3):
                 raise DownloadError("Stopped")
+            found = sorted(work.glob("*.torrent"))
+            if found and _complete_torrent(found[0]):
+                break        # RPC mode: aria2 keeps running after the file list arrived
             if time.monotonic() > end:
                 raise DownloadError("No one shared this torrent's file list in time "
                                     "(no peers yet; try again later)")
+            if time.monotonic() >= next_poll:
+                next_poll = time.monotonic() + 1.0
+                act = rpc_call(port, secret, "aria2.tellActive", ["gid", "connections", "numSeeders"])
+                if act and on_status:
+                    peers = rpc_call(port, secret, "aria2.getPeers", act[0]["gid"]) or []
+                    on_status(int(act[0].get("connections") or 0), int(act[0].get("numSeeders") or 0),
+                              peer_rows(peers))
+                elif act == []:          # stopped: finished (file list written) or failed
+                    st = (rpc_call(port, secret, "aria2.tellStopped", 0, 1,
+                                   ["status", "errorCode", "errorMessage"]) or [{}])[0]
+                    if st.get("status") == "error":
+                        code = str(st.get("errorCode", ""))
+                        raise DownloadError(f"{_ERRORS.get(code, 'aria2 error')}: "
+                                            f"{(st.get('errorMessage') or '').strip()[:200]}".rstrip(": "))
         found = sorted(work.glob("*.torrent"))
         if not found:
             raise DownloadError(_error_text(lines, proc.returncode))
         return found[0].read_bytes()
     finally:
         if proc.poll() is None:
+            rpc_call(port, secret, "aria2.shutdown")
+            try:
+                proc.wait(5)
+            except subprocess.TimeoutExpired:
+                pass
+        if proc.poll() is None:
             proc.terminate()
             try:
                 proc.wait(5)
             except subprocess.TimeoutExpired:
                 proc.kill()
+        peer.close()
         for p in work.glob("*"):
             try:
                 p.unlink()
@@ -373,7 +537,9 @@ class TorrentTask(_TaskBase):
         self.gid = None
         self.done = False
         self._meta_proc = None
-        self._rpc_opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+        self.peer = None                # PeerPort while aria2 runs
+        self.peer_list = []             # [{'addr', 'down', 'up', 'have', 'seeder', 'choked'}] for the window
+        self._peers_at = 0.0
 
     def stop(self):
         # aria2 is shut down from the task's own loop (cleanly, so it can save where it was)
@@ -390,21 +556,19 @@ class TorrentTask(_TaskBase):
                              daemon=True).start()
 
     def _rpc(self, method, *params):
-        body = json.dumps({"jsonrpc": "2.0", "id": "draco", "method": method,
-                           "params": [f"token:{self.secret}", *params]}).encode()
-        req = urllib.request.Request(f"http://127.0.0.1:{self.port}/jsonrpc", body,
-                                     {"Content-Type": "application/json"})
-        try:
-            with self._rpc_opener.open(req, timeout=3) as r:
-                return json.loads(r.read().decode()).get("result")
-        except (OSError, ValueError):
-            return None
+        return rpc_call(self.port, self.secret, method, *params)
+
+    def _meta_status(self, peers, seeds, rows):
+        it = self.item
+        it["peers"], it["seeds"] = peers, seeds
+        self.peer_list = rows
+        self.on_update(it)
 
     def _command(self, path, info):
         it, s = self.item, self.settings
-        cmd = [ARIA2] + _base_opts() + [
-            "--enable-rpc=true", "--rpc-listen-all=false", f"--rpc-listen-port={self.port}",
-            f"--rpc-secret={self.secret}", f"--dir={it['save_dir']}", "--continue=true",
+        cmd = [ARIA2] + _base_opts(self.peer.port if self.peer else None, s, info.get("private")) + \
+            _rpc_opts(self.port, self.secret) + [
+            f"--dir={it['save_dir']}", "--continue=true",
             "--bt-save-metadata=false", "--rpc-save-upload-metadata=false"]
         idx = selected_indices(it, info)
         if len(idx) < len(info["files"]):
@@ -432,9 +596,6 @@ class TorrentTask(_TaskBase):
             cmd.append(f"--max-download-limit={down}K")
         if s["speed_limit_kbps"]:
             cmd.append(f"--max-overall-download-limit={int(s['speed_limit_kbps'])}K")
-        port = str(s.get("torrent_port", "") or "").strip()
-        if re.fullmatch(r"\d{2,5}(-\d{2,5})?", port):
-            cmd.append(f"--listen-port={port}")
         return cmd + [str(path)]
 
     def _apply_info(self, info):
@@ -454,14 +615,23 @@ class TorrentTask(_TaskBase):
         it = self.item
         if not ARIA2:
             raise DownloadError(INSTALL_HINT)
-        self._set(status="connecting", speed=0)
+        self._set(status="connecting", speed=0, peers=0, seeds=0)
         path, info = fetch_metadata(it, self.settings, self.stop_event,
-                                    on_proc=lambda p: setattr(self, "_meta_proc", p))
+                                    on_proc=lambda p: setattr(self, "_meta_proc", p), on_status=self._meta_status)
+        self.peer_list = []
         if self.stop_event.is_set():
             return False
         self._apply_info(info)
         Path(it["save_dir"]).mkdir(parents=True, exist_ok=True)
         self.port, self.secret = _free_port(), secrets.token_hex(16)
+        self.peer = PeerPort(self.settings)
+        try:
+            return self._run_aria2(path, info)
+        finally:
+            self.peer.close()
+
+    def _run_aria2(self, path, info):
+        it = self.item
         self.proc = subprocess.Popen(self._command(path, info), stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                                      text=True, encoding="utf-8", errors="replace", **popen_kwargs())
         lines = []
@@ -472,7 +642,8 @@ class TorrentTask(_TaskBase):
                 del lines[:-40]
         threading.Thread(target=read, daemon=True).start()
         keys = ["gid", "status", "totalLength", "completedLength", "uploadLength", "downloadSpeed",
-                "uploadSpeed", "connections", "numSeeders", "seeder", "verifiedLength", "errorCode", "errorMessage"]
+                "uploadSpeed", "connections", "numSeeders", "seeder", "verifiedLength", "errorCode", "errorMessage",
+                "numPieces"]
         quit_sent = 0.0
         failed = ""
         while self.proc.poll() is None:
@@ -537,6 +708,9 @@ class TorrentTask(_TaskBase):
         it["up_speed"] = n("uploadSpeed")
         it["uploaded"] = n("uploadLength")
         it["peers"], it["seeds"] = n("connections"), n("numSeeders")
+        if self.gid and time.monotonic() - self._peers_at > 2 and st.get("status") == "active":
+            self._peers_at = time.monotonic()
+            self.peer_list = peer_rows(self._rpc("aria2.getPeers", self.gid), n("numPieces"))
         if st.get("seeder") == "true" or (total and done >= total):
             it["downloaded"] = it["size"]
             seeding = st.get("status") == "active" and self.settings.get("torrent_seed", True)

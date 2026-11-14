@@ -79,11 +79,23 @@ def eta(item):
     return (size - done) / speed
 
 
+def peer_text(item):
+    """'12 peers (5 seeds)' for a running torrent, or what it is still waiting for."""
+    n, seeds = item.get("peers") or 0, item.get("seeds") or 0
+    if not n:
+        return "Looking for peers…"
+    return f"{n} peer{'s' if n != 1 else ''}" + (f" ({seeds} seed{'s' if seeds != 1 else ''})" if seeds else "")
+
+
 def status_text(item):
     st = item.get("status", "stopped")
+    torrent = item.get("kind") == "torrent"
     if st == "downloading":
         f = fraction(item)
-        return f"{f * 100:.1f}%" if (item.get("size", -1) > 0 or item.get("seg_total")) else fmt_size(item.get("downloaded", 0))
+        txt = f"{f * 100:.1f}%" if (item.get("size", -1) > 0 or item.get("seg_total")) else fmt_size(item.get("downloaded", 0))
+        return f"{txt} · {peer_text(item)}" if torrent else txt
+    if st == "connecting" and torrent:
+        return ("Getting file list · " if not item.get("torrent_files") else "Connecting · ") + peer_text(item)
     if st == "error":
         return "Error: " + (item.get("error") or "")
     if st == "seeding":

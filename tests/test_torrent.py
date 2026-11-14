@@ -177,7 +177,21 @@ class TorrentFormatTests(unittest.TestCase):
         self.assertIn("--index-out=2=Renamed/b.bin", cmd)     # not chosen, but its edge pieces land there
         self.assertIn("--seed-ratio=1.0", cmd)
         self.assertFalse(any(c.startswith("--seed-time") for c in cmd))   # 0 minutes = no time limit
-        self.assertIn("--listen-port=6881-6889", cmd)
+        self.assertFalse(any(c.startswith("--listen-port") for c in cmd))   # no port held yet
+        self.assertIn("--bt-tracker=" + ",".join(torrent.PUBLIC_TRACKERS), cmd)
+        s["torrent_upnp"] = False
+        task.peer = torrent.PeerPort(s)
+        try:
+            cmd = task._command(path, info)
+            self.assertTrue(6881 <= task.peer.port <= 6889)
+            self.assertIn(f"--listen-port={task.peer.port}", cmd)
+            self.assertIn(f"--dht-listen-port={task.peer.port}", cmd)
+            other = torrent.PeerPort(s)              # a second torrent at the same time gets another port
+            self.assertNotEqual(other.port, task.peer.port)
+            other.close()
+            self.assertFalse(any(c.startswith("--bt-tracker") for c in task._command(path, dict(info, private=True))))
+        finally:
+            task.peer.close()
         s["torrent_seed"] = False
         self.assertIn("--seed-time=0", task._command(path, info))
 
@@ -212,6 +226,18 @@ def _port():
         s.bind(("127.0.0.1", 0))
         return s.getsockname()[1]
 
+    def test_peer_rows(self):
+        rows = torrent.peer_rows([
+            {"ip": "10.0.0.2", "port": "6881", "downloadSpeed": "100", "uploadSpeed": "0", "bitfield": "f0",
+             "seeder": "false", "peerChoking": "false"},
+            {"ip": "::1", "port": "51413", "downloadSpeed": "900", "uploadSpeed": "5", "bitfield": "ff",
+             "seeder": "true", "peerChoking": "true"},
+            {"ip": "bad", "port": "1", "downloadSpeed": "x"}], num_pieces=8)
+        self.assertEqual([r["addr"] for r in rows], ["[::1]:51413", "10.0.0.2:6881"])   # fastest first
+        self.assertEqual(rows[1]["have"], 0.5)
+        self.assertTrue(rows[0]["seeder"])
+        self.assertEqual(rows[0]["have"], 1.0)
+
 
 @unittest.skipUnless(shutil.which("aria2c"), "aria2c is not installed")
 class TorrentDownloadTests(unittest.TestCase):
@@ -235,6 +261,8 @@ class TorrentDownloadTests(unittest.TestCase):
         self.seeder = None
         self.settings = Settings(self.dir / "settings.json")
         self.settings["torrent_seed"] = False
+        self.settings["torrent_upnp"] = False             # never touch the real router from tests
+        self.settings["torrent_public_trackers"] = False  # and stay off the internet
 
     def tearDown(self):
         if self.seeder and self.seeder.poll() is None:
@@ -335,6 +363,7 @@ class TorrentDownloadTests(unittest.TestCase):
         self.run_task(it)
         self.assertEqual(it["status"], "complete", it.get("error"))
         self.assertEqual(it["info_hash"], ih)
+        self.assertIn("peers", it)
         self.assertTrue((torrent.TORRENT_DIR / f"{ih}.torrent").is_file())
         self.assertTrue(self.same("sub/b.bin"))
         self.assertEqual(list(torrent.TORRENT_DIR.glob(".meta-*")), [])

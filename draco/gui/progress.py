@@ -228,7 +228,7 @@ class ProgressView(Gtk.Box):
         self.fields = {}
         for row, (key, title) in enumerate([("size", "File size"), ("done", "Downloaded"),
                                             ("rate", "Transfer rate"), ("eta", "Time left"),
-                                            ("resume", "Resume capability")]):
+                                            ("resume", "Peers" if self.item.get("kind") == "torrent" else "Resume capability")]):
             k = util.label(title, css=["gx-key"], ellipsize=False)
             k.set_size_request(170, -1)
             grid.attach(k, 0, row, 1, 1)
@@ -359,7 +359,7 @@ class ProgressView(Gtk.Box):
         grid = Gtk.Grid(column_spacing=22, row_spacing=5, valign=Gtk.Align.CENTER)
         self.fields = {}
         for r, (key, title) in enumerate([("size", "File size"), ("done", "Downloaded"), ("rate", "Transfer rate"),
-                                          ("eta", "Time left"), ("resume", "Resume capability")]):
+                                          ("eta", "Time left"), ("resume", "Peers" if self.item.get("kind") == "torrent" else "Resume capability")]):
             grid.attach(util.label(title, css=["draco-field-title"], ellipsize=False), 0, r, 1, 1)
             v = util.label(ellipsize=False)
             grid.attach(v, 1, r, 1, 1)
@@ -426,7 +426,7 @@ class ProgressView(Gtk.Box):
         self.fields = {}
         for row, (key, title) in enumerate([("size", "File size"), ("done", "Downloaded"),
                                             ("rate", "Transfer rate"), ("eta", "Time left"),
-                                            ("resume", "Resume capability")]):
+                                            ("resume", "Peers" if self.item.get("kind") == "torrent" else "Resume capability")]):
             grid.attach(util.label(title, css=["draco-field-title"], ellipsize=False), 0, row, 1, 1)
             v = util.label(ellipsize=False)
             v.set_hexpand(True)
@@ -541,8 +541,11 @@ class ProgressView(Gtk.Box):
         f["done"].set_text(fmt_size(it.get("downloaded", 0)) + (f" ( {frac * 100:.2f} % )" if size > 0 else ""))
         f["rate"].set_text(fmt_speed(it.get("speed")) or "—")
         f["eta"].set_text(fmt_eta(util.eta(it)) or "—")
-        f["resume"].set_text("Yes" if it.get("resumable") or it.get("kind") in ("hls", "ytdlp") else
-                             ("Unknown" if not it.get("probed") else "No"))
+        if it.get("kind") == "torrent":
+            f["resume"].set_text(util.peer_text(it) if task else "—")
+        else:
+            f["resume"].set_text("Yes" if it.get("resumable") or it.get("kind") in ("hls", "ytdlp") else
+                                 ("Unknown" if not it.get("probed") else "No"))
         self.bar.set_fraction(frac)
         self.pct_lbl.set_text(f"{frac * 100:.0f}%")
         if self.design == "browser":

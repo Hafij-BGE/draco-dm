@@ -224,10 +224,11 @@ class BrightDetails(Gtk.Box):
 
         info = Gtk.Box(spacing=14)
         grid = Gtk.Grid(column_spacing=22, row_spacing=8, valign=Gtk.Align.START)
-        self.vals = {}
+        self.vals, self.pane_keys = {}, {}
         for r, (key, title) in enumerate((("size", "File size"), ("done", "Downloaded"), ("rate", "Transfer rate"),
                                           ("eta", "Time left"), ("resume", "Resume capability"))):
-            grid.attach(_lbl(title, css=["bw-key"]), 0, r, 1, 1)
+            self.pane_keys[key] = _lbl(title, css=["bw-key"])
+            grid.attach(self.pane_keys[key], 0, r, 1, 1)
             v = _lbl(css=["bw-val"])
             v.set_ellipsize(Pango.EllipsizeMode.END)
             v.set_width_chars(12)
@@ -316,7 +317,13 @@ class BrightDetails(Gtk.Box):
         self.vals["rate"].set_text(fmt_speed(it.get("speed")) or "—")
         self.vals["eta"].set_text(eta or "—")
         resumable = it.get("resumable") or it.get("kind") in ("hls", "ytdlp")
-        self.vals["resume"].set_text("Yes" if resumable else "No")
+        torrent = it.get("kind") == "torrent"
+        self.pane_keys["resume"].set_text("Peers" if torrent else "Resume capability")
+        if torrent:
+            resumable = False                 # plain colour for the peer count
+            self.vals["resume"].set_text(util.peer_text(it) if it.get("status") in ACTIVE + ("seeding",) else "—")
+        else:
+            self.vals["resume"].set_text("Yes" if resumable else "No")
         for c in ("bw-val", "bw-yes"):
             self.vals["resume"].remove_css_class(c)
         self.vals["resume"].add_css_class("bw-yes" if resumable else "bw-val")
@@ -798,11 +805,12 @@ class BrightProgressWindow(Adw.Window):
         pic.set_margin_start(4)
         status.append(pic)
         grid = Gtk.Grid(column_spacing=16, row_spacing=6, valign=Gtk.Align.CENTER, margin_top=10, margin_bottom=10)
-        self.vals = {}
+        self.vals, self.keys = {}, {}
         rows = (("type", "File type:"), ("source", "Source:"), ("save", "Save to:"), ("state", "Status:"),
                 ("resume", "Resumable:"))
         for r, (key, title) in enumerate(rows):
-            grid.attach(_lbl(title, css=["pk-key"]), 0, r, 1, 1)
+            self.keys[key] = _lbl(title, css=["pk-key"])
+            grid.attach(self.keys[key], 0, r, 1, 1)
             if key in ("source", "save"):
                 cell = Gtk.Box(spacing=5)
                 cell.append(Gtk.Image(icon_name="web-browser-symbolic" if key == "source" else "folder-symbolic",
@@ -828,20 +836,26 @@ class BrightProgressWindow(Adw.Window):
         self.stack.add_named(status, "status")
 
         conns = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6, margin_top=10, margin_bottom=10,
-                        margin_start=12, margin_end=12)
+                        margin_start=12, margin_end=12, hexpand=True)
         wrap = Gtk.Box()
         wrap.add_css_class("pk-card")
         wrap.append(conns)
-        conns.append(_lbl("Start positions and download progress by connections", css=["pk-key"]))
+        is_torrent = item.get("kind") == "torrent"
+        self.conn_title = _lbl("Peers you are connected to" if is_torrent else
+                               "Start positions and download progress by connections", css=["pk-key"])
+        conns.append(self.conn_title)
         self.map = SegmentMap(item)
+        self.map.set_visible(not is_torrent)
         conns.append(self.map)
         self.conn_grid = Gtk.Grid(column_spacing=18, row_spacing=2)
         self.conn_grid.add_css_class("draco-conn-table")
-        for c, title in enumerate(("N.", "Downloaded", "Info")):
+        heads = ("Peer", "Speed (down / up)", "Has") if is_torrent else ("N.", "Downloaded", "Info")
+        for c, title in enumerate(heads):
             self.conn_grid.attach(_lbl(title, css=["head"]), c, 0, 1, 1)
         self.conn_rows = []
         conns.append(Gtk.ScrolledWindow(child=self.conn_grid, min_content_height=120, max_content_height=180,
-                                        propagate_natural_height=True))
+                                        propagate_natural_height=True, propagate_natural_width=True,
+                                        hscrollbar_policy=Gtk.PolicyType.NEVER))
         self.stack.add_named(wrap, "connections")
 
         logw = Gtk.Box()
@@ -950,16 +964,28 @@ class BrightProgressWindow(Adw.Window):
         self.icon.set_from_icon_name(bright_style.file_icon(it))
         got = fmt_size(it.get("downloaded", 0))
         self.sizes.set_text(f"{fmt_size(size)} ({got} / {fmt_size(size)})" if size > 0 else got)
-        ext = name.rsplit(".", 1)[-1].upper() if "." in name else ""
-        self.vals["type"].set_text(f"{bright_style.KINDS[self.kind]['title']}" + (f" ({ext})" if ext else ""))
+        if it.get("kind") == "torrent":       # a torrent's name is a folder or title, not a file name
+            self.vals["type"].set_text("Torrent")
+        else:
+            ext = name.rsplit(".", 1)[-1].upper() if "." in name else ""
+            self.vals["type"].set_text(f"{bright_style.KINDS[self.kind]['title']}" + (f" ({ext})" if ext else ""))
         from urllib.parse import urlsplit
         self.vals["source"].set_text(urlsplit(it["url"]).hostname or it["url"])
         self.vals["save"].set_text(str(it.get("save_dir") or ""))
         state = {"downloading": "Downloading…", "connecting": "Connecting…", "merging": "Joining…",
                  "complete": "Complete", "seeding": "Seeding", "checking": "Checking files…",
                  "error": "Error"}.get(st, st.capitalize())
+        torrent = it.get("kind") == "torrent"
+        if torrent and st == "connecting" and not it.get("torrent_files"):
+            state = "Getting the file list…"
         self.vals["state"].set_text(state)
-        self.vals["resume"].set_text("Yes" if it.get("resumable") or it.get("kind") in ("hls", "ytdlp") else "No")
+        if torrent:                          # always resumable: show who we're connected to instead
+            self.keys["resume"].set_text("Peers:")
+            self.vals["resume"].remove_css_class("pk-yes")
+            self.vals["resume"].add_css_class("pk-val")
+            self.vals["resume"].set_text(util.peer_text(it) if task else "—")
+        else:
+            self.vals["resume"].set_text("Yes" if it.get("resumable") or it.get("kind") in ("hls", "ytdlp") else "No")
         self.speed.set_text(fmt_speed(it.get("speed")) if st == "downloading" else "")
         self.graph.push(it.get("speed", 0) if st == "downloading" else 0)
         self.pct.set_text(f"{frac * 100:.0f}%")
@@ -986,6 +1012,13 @@ class BrightProgressWindow(Adw.Window):
     def _conns(self, task):
         segs = sorted(self.item.get("segments") or [], key=lambda s: s["s"])
         rows = []
+        if self.item.get("kind") == "torrent":
+            segs = []
+            for p in (getattr(task, "peer_list", None) or [])[:60]:
+                have = "seed" if p["seeder"] else (f"{p['have'] * 100:.0f}%" if p["have"] is not None else "—")
+                rows.append((f"{fmt_speed(p['down']) or '0 B/s'} / {fmt_speed(p['up']) or '0 B/s'}", have, p["addr"]))
+            self.conn_title.set_text(f"Peers you are connected to: {len(rows)}" if task else
+                                     "Peers: not connected (paused)")
         for sg in segs:
             total = (sg["e"] - sg["s"]) if sg["e"] >= 0 else -1
             got = sg["p"] - sg["s"]
@@ -994,6 +1027,7 @@ class BrightProgressWindow(Adw.Window):
         while len(self.conn_rows) < len(rows):
             r = len(self.conn_rows) + 1
             cells = [_lbl(str(r)), _lbl(xalign=1), _lbl()]
+            cells[0].set_selectable(self.item.get("kind") == "torrent")
             for c, w in enumerate(cells):
                 self.conn_grid.attach(w, c, r, 1, 1)
             self.conn_rows.append(cells)
@@ -1002,6 +1036,8 @@ class BrightProgressWindow(Adw.Window):
             for w in cells:
                 w.set_visible(vis)
             if vis:
+                if len(rows[i]) > 2:
+                    cells[0].set_text(rows[i][2])
                 cells[1].set_text(rows[i][0])
                 cells[2].set_text(rows[i][1])
 

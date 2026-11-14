@@ -451,4 +451,6 @@ class Manager:
             t.stop()
         for t in tasks:
             t.join(10)
+        from .upnp import MAPPER
+        MAPPER.close()              # close the router ports torrents opened
         self.save()

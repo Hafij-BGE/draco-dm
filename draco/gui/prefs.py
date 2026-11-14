@@ -108,6 +108,10 @@ class PrefsDialog(Adw.PreferencesDialog):
         for k in ("torrent_seed_ratio", "torrent_seed_minutes", "torrent_upload_kbps"):
             g.add(self.rows[k])
         self._entry(g, "torrent_port", "Listening port(s), e.g. 6881-6999 (empty = automatic)")
+        self._switch(g, "torrent_upnp", "Open the port on the router (UPnP)")
+        self.rows["torrent_upnp"].set_subtitle("Lets peers connect to you: more seeds, steadier speed")
+        self._switch(g, "torrent_public_trackers", "Add public trackers to public torrents")
+        self.rows["torrent_public_trackers"].set_subtitle("Finds more peers for magnet links; never for private torrents")
         p.add(g)
         self.add(p)
 
