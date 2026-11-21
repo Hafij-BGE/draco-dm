@@ -79,7 +79,10 @@ class Bridge:
                 self.wfile.write(body)
 
             def _body(self):
-                n = int(self.headers.get("Content-Length") or 0)
+                try:
+                    n = int(self.headers.get("Content-Length") or 0)
+                except ValueError:   # non-numeric Content-Length -> 400 "unsupported command"
+                    return None
                 if n <= 0 or n > MAX_BODY:
                     return None
                 try:

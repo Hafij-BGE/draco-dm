@@ -27,7 +27,7 @@ import urllib.request
 from pathlib import Path
 
 from .config import DATA_DIR
-from .engine import DownloadError, build_headers, build_opener, open_url, sanitize_filename
+from .engine import DownloadError, build_headers, build_opener, open_url, sanitize_filename, sanitize_name
 from .media import _TaskBase
 from .osdeps import IS_WIN, popen_kwargs, which
 from .upnp import MAPPER
@@ -109,7 +109,7 @@ def _text(d, key):
 
 
 def _safe_part(part):
-    part = sanitize_filename(part).strip()
+    part = sanitize_name(part).strip()   # never percent-decoded: aria2 writes the name as it is
     return "_" if part in ("", ".", "..") else part
 
 
@@ -124,13 +124,17 @@ def parse_torrent(data):
         raise ValueError("not a torrent file")
     start, end = meta[b"\0info-span"]
     info = meta[b"info"]
-    name = _safe_part(_text(info, b"name") or "torrent")
+    raw_name = _text(info, b"name") or "torrent"
+    name = _safe_part(raw_name)
     files = []
+    differs = name != raw_name          # aria2 would write another path than ours: Draco names each file
     if b"files" in info:
         for f in info[b"files"]:
             raw = f.get(b"path.utf-8") or f.get(b"path") or []
             pad = b"p" in (f.get(b"attr") or b"") or raw[:1] == [b".pad"]
-            parts = [_safe_part(p.decode("utf-8", "replace")) for p in raw]
+            texts = [p.decode("utf-8", "replace") for p in raw]
+            parts = [_safe_part(p) for p in texts]
+            differs = differs or parts != texts
             files.append({"path": "/".join([name] + parts), "size": int(f.get(b"length", 0)), "pad": pad})
     elif b"length" in info:
         files.append({"path": name, "size": int(info[b"length"]), "pad": False})
@@ -138,7 +142,7 @@ def parse_torrent(data):
         raise ValueError("BitTorrent v2-only torrents are not supported")
     return {"name": name, "info_hash": hashlib.sha1(bytes(data)[start:end]).hexdigest(),
             "size": sum(f["size"] for f in files if not f["pad"]), "files": files,
-            "private": bool(info.get(b"private"))}
+            "private": bool(info.get(b"private")), "paths_differ": differs}
 
 
 def save_torrent(data):
@@ -486,6 +490,14 @@ def selected_indices(item, info):
     return [i for i in range(1, len(files) + 1) if i in wanted and not files[i - 1]["pad"]]
 
 
+def _fix_legacy_name(item, info):
+    """Older Draco versions decoded "%2E" in a torrent's name ("report%2Epdf" -> "report.pdf") while
+    aria2 wrote the literal name: point such an item back at the files aria2 really wrote."""
+    name = item.get("filename")
+    if name and not item.get("torrent_rename") and name != info["name"] and name == sanitize_filename(info["name"]):
+        item["filename"] = info["name"]
+
+
 def mapped_path(item, info, rel):
     """A torrent file path (starting with the torrent's name) under the root the item uses."""
     root = item.get("filename") or info["name"]
@@ -498,6 +510,7 @@ def data_paths(item):
         info = load_torrent(item["torrent_file"])
     except (KeyError, OSError, ValueError, TypeError):
         return []
+    _fix_legacy_name(item, info)
     base = Path(item["save_dir"])
     out = [base / mapped_path(item, info, info["files"][i - 1]["path"]) for i in selected_indices(item, info)]
     root = base / (item.get("filename") or info["name"])
@@ -508,8 +521,35 @@ def data_paths(item):
     return out
 
 
-def delete_data(item):
+def _is_partial(p, sizes):
+    """For an unfinished download: is `p` this torrent's own part? Only while aria2's control file
+    is there, and never a file bigger than the torrent's (so a user's own file of that name stays)."""
+    if p.is_dir() or p.suffix == ".aria2":
+        return True
+    try:
+        return p in sizes and p.stat().st_size <= sizes[p]
+    except OSError:
+        return False
+
+
+def delete_data(item, partial_only=False):
+    """Delete the item's files. partial_only (removing an unfinished download without "delete
+    files"): only the part aria2 is writing, recognised by its .aria2 control file and size."""
+    sizes = {}
+    if partial_only:
+        try:
+            info = load_torrent(item["torrent_file"])
+        except (KeyError, OSError, ValueError, TypeError):
+            return
+        _fix_legacy_name(item, info)
+        base = Path(item["save_dir"])
+        names = {item.get("filename") or "", info["name"]} - {""}
+        if not any((base / (n + ".aria2")).is_file() for n in names):
+            return                                   # no control file: nothing here is a part of ours
+        sizes = {base / mapped_path(item, info, f["path"]): f["size"] for f in info["files"]}
     for p in data_paths(item):
+        if partial_only and not _is_partial(p, sizes):
+            continue
         try:
             if p.is_dir():
                 for sub in sorted(p.rglob("*"), key=lambda x: len(x.parts), reverse=True):
@@ -573,7 +613,7 @@ class TorrentTask(_TaskBase):
         idx = selected_indices(it, info)
         if len(idx) < len(info["files"]):
             cmd.append("--select-file=" + ",".join(map(str, idx)))
-        if (it.get("filename") or info["name"]) != info["name"]:
+        if (it.get("filename") or info["name"]) != info["name"] or info.get("paths_differ"):
             # every file, not only the chosen ones: aria2 also writes the edge pieces of the others
             for i in range(1, len(info["files"]) + 1):
                 cmd.append(f"--index-out={i}={mapped_path(it, info, info['files'][i - 1]['path'])}")
@@ -603,9 +643,10 @@ class TorrentTask(_TaskBase):
         it["torrent_name"] = info["name"]
         it["torrent_files"] = [{"path": f["path"], "size": f["size"], "pad": f["pad"]} for f in info["files"]]
         idx = selected_indices(it, info)
+        _fix_legacy_name(it, info)
         it["size"] = sum(info["files"][i - 1]["size"] for i in idx)
         if not it.get("torrent_named"):
-            root = sanitize_filename(it.get("torrent_rename") or info["name"])
+            root = sanitize_filename(it["torrent_rename"]) if it.get("torrent_rename") else info["name"]
             reserve = getattr(self, "reserve_name", None)
             it["filename"] = reserve(it, root) if reserve else root
             it["torrent_named"] = True

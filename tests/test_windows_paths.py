@@ -74,6 +74,30 @@ class TcpIpcTest(unittest.TestCase):
         self.assertNotIn("evil", added[-1])
 
 
+    def test_native_host_survives_bad_frames(self):
+        """Non-JSON, invalid UTF-8 and a truncated frame each get an error reply; the host keeps
+        reading after a bad frame and still answers the next good one."""
+        host = ROOT / "native_host" / "draco_host.py"
+        env = dict(os.environ, DRACO_IPC="tcp", XDG_RUNTIME_DIR=self.tmp.name, DRACO_LAUNCH='["/bin/false"]')
+        frames = b""
+        for d in (b"not json", b"\xff\xfe", json.dumps({"cmd": "ping"}).encode()):
+            frames += struct.pack("<I", len(d)) + d
+        frames += struct.pack("<I", 100) + b'{"cmd"'      # short body, then EOF
+        out = subprocess.run([sys.executable, str(host)], input=frames, capture_output=True, env=env, timeout=20)
+        replies = []
+        data = out.stdout
+        while data:
+            n = struct.unpack("<I", data[:4])[0]
+            replies.append(json.loads(data[4:4 + n]))
+            data = data[4 + n:]
+        self.assertEqual(out.returncode, 0, out.stderr)
+        self.assertEqual([r.get("ok") for r in replies], [False, False, True, False], replies)
+        self.assertIn("truncated", replies[-1]["error"])
+        big = subprocess.run([sys.executable, str(host)], input=struct.pack("<I", 0xFFFFFFF0),
+                             capture_output=True, env=env, timeout=20).stdout
+        self.assertIn(b"too large", big)
+
+
 class NoPwriteTest(unittest.TestCase):
     """Download with the Windows write path (no os.pwrite)."""
 

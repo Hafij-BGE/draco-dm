@@ -15,18 +15,30 @@ from draco.engine import HttpTask, RateLimiter, probe
 from draco.batch import expand_pattern
 
 PAYLOAD = os.urandom(5 * 1024 * 1024 + 123)
+PAYLOAD2 = os.urandom(len(PAYLOAD))      # a new version of the file, the same length
 
 
 class RangeHandler(http.server.BaseHTTPRequestHandler):
     support_range = True
     throttle = 0
     valid_cookie = "s=v1"   # /login-file: other cookies are sent to a sign-in page
+    seen = []               # (path, headers) of /hop and /landed requests
+    version = 1             # /versioned: which file the server has now (ETag "v1" / "v2")
 
     def log_message(self, *a):
         pass
 
     def do_GET(self):
         data = PAYLOAD
+        if self.path.startswith("/hop"):        # /hop?to=<url>: a redirect, maybe to another host
+            RangeHandler.seen.append((self.path, dict(self.headers)))
+            self.send_response(302)
+            self.send_header("Location", self.path.split("to=", 1)[1])
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
+        if self.path.startswith("/landed"):
+            RangeHandler.seen.append((self.path, dict(self.headers)))
         if self.path.startswith("/accounts/signin"):
             page = b"<!doctype html><html><body>Sign in</body></html>"
             self.send_response(200)
@@ -55,6 +67,15 @@ class RangeHandler(http.server.BaseHTTPRequestHandler):
             self.close_connection = True
             return
         rng = self.headers.get("Range")
+        etag = None
+        cut = None
+        if self.path.startswith("/flaky"):      # every answer drops after 160 KB
+            data, cut = PAYLOAD[:600 * 1024], 160 * 1024
+        if self.path.startswith("/versioned"):
+            data = PAYLOAD if RangeHandler.version == 1 else PAYLOAD2
+            etag = f'"v{RangeHandler.version}"'
+            if self.headers.get("If-Range") not in (None, etag):
+                rng = None                      # changed since: the whole new file
         if rng:
             m = re.match(r"bytes=(\d+)-(\d*)", rng)
             start = int(m.group(1))
@@ -67,9 +88,15 @@ class RangeHandler(http.server.BaseHTTPRequestHandler):
             body = data
             self.send_response(200)
         self.send_header("Content-Length", str(len(body)))
+        if etag:
+            self.send_header("ETag", etag)
         self.send_header("Content-Disposition", "attachment; filename*=UTF-8''t%C3%A9st%20file.bin")
         self.end_headers()
         step = 32 * 1024
+        if cut is not None and len(body) > cut:
+            self.wfile.write(body[:cut])
+            self.close_connection = True
+            return
         for i in range(0, len(body), step):
             try:
                 self.wfile.write(body[i:i + step])
@@ -174,6 +201,15 @@ class EngineTest(unittest.TestCase):
         self.assertIn("sign in again", it["error"])
         self.assertTrue(it.get("needs_login"))
 
+    def test_retry_budget_resets_after_progress(self):
+        """Each attempt moves the segment forward before the link drops: more drops than
+        `retries` in total must not fail the download (the counter resets on progress)."""
+        self.settings["retries"] = 2
+        it = self.item("/flaky", connections=1)
+        self.run_task(it)
+        self.assertEqual(it["status"], "complete", it.get("error"))
+        self.assertEqual(Path(self.tmp.name, it["filename"]).read_bytes(), PAYLOAD[:600 * 1024])
+
     def test_pause_resume(self):
         RangeHandler.throttle = 0.05
         it = self.item("/file")
@@ -185,6 +221,49 @@ class EngineTest(unittest.TestCase):
         self.run_task(it)
         self.assertEqual(it["status"], "complete", it.get("error"))
         self.assertEqual(self.sha(Path(self.tmp.name) / it["filename"]), hashlib.sha256(PAYLOAD).hexdigest())
+
+    def test_file_changed_while_paused_starts_over(self):
+        RangeHandler.version, RangeHandler.throttle = 1, 0.05
+        self.addCleanup(setattr, RangeHandler, "version", 1)
+        it = self.item("/versioned")
+        self.run_task(it, stop_after=0.5)
+        self.assertEqual(it["status"], "paused")
+        self.assertGreater(it["downloaded"], 0)
+        self.assertEqual(it["etag"], '"v1"')
+        RangeHandler.version, RangeHandler.throttle = 2, 0     # the server's file is replaced
+        self.run_task(it)
+        self.assertEqual(it["status"], "complete", it.get("error"))
+        self.assertEqual(self.sha(Path(self.tmp.name) / it["filename"]), hashlib.sha256(PAYLOAD2).hexdigest())
+
+    def test_login_and_cookies_stay_on_their_host(self):
+        port = self.server.server_address[1]
+        RangeHandler.seen = []
+        it = self.item(f"/hop?to=http://localhost:{port}/landed/x.bin", auth_user="u", auth_password="pw",
+                       cookies="sid=SECRET")
+        probe(it, self.settings)
+        landed = [h for p, h in RangeHandler.seen if p.startswith("/landed")]
+        self.assertTrue(landed)
+        self.assertTrue(any("Authorization" in h for p, h in RangeHandler.seen if p.startswith("/hop")))
+        for h in landed:                                  # another host: no login, no cookies
+            self.assertNotIn("Authorization", h)
+            self.assertNotIn("Cookie", h)
+        RangeHandler.seen = []
+        probe(self.item("/hop?to=/landed/y.bin", cookies="sid=SECRET", auth_user="u"), self.settings)
+        landed = [h for p, h in RangeHandler.seen if p.startswith("/landed")]
+        self.assertTrue(landed and all("Cookie" in h and "Authorization" in h for h in landed))  # same host
+
+    def test_site_login_matches_the_host_only(self):
+        self.settings["site_logins"] = [{"pattern": "example.com", "user": "a", "password": "1"},
+                                        {"pattern": "https://files.test:8443/private", "user": "b", "password": "2"}]
+        lf = self.settings.login_for
+        self.assertEqual(lf("https://example.com/f.zip"), ("a", "1"))
+        self.assertEqual(lf("http://dl.example.com/f.zip"), ("a", "1"))
+        self.assertIsNone(lf("https://evil.com/?example.com"))
+        self.assertIsNone(lf("https://example.com.evil.com/f"))
+        self.assertIsNone(lf("https://notexample.com/f"))
+        self.assertEqual(lf("https://files.test:8443/private/x"), ("b", "2"))
+        self.assertIsNone(lf("https://files.test:8443/public/x"))
+        self.assertIsNone(lf("http://files.test:8443/private/x"))
 
     def test_no_range_server(self):
         it = self.item("/norange/x.bin")

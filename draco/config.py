@@ -3,6 +3,7 @@
 import json
 import os
 import threading
+import urllib.parse
 from pathlib import Path
 
 
@@ -195,7 +196,29 @@ class Settings:
         return base / category
 
     def login_for(self, url):
+        """The login whose pattern ("example.com", "files.example.com/private",
+        "https://example.com:8443/") matches the URL's own host name (or a subdomain of it): a
+        pattern that only appears somewhere else in the URL, like "evil.com/?example.com", does not."""
+        u = urllib.parse.urlsplit(url)
+        host, path = (u.hostname or "").lower(), u.path or "/"
         for entry in self["site_logins"]:
-            if entry.get("pattern") and entry["pattern"] in url:
-                return entry.get("user", ""), entry.get("password", "")
+            pattern = (entry.get("pattern") or "").strip()
+            if not pattern:
+                continue
+            p = urllib.parse.urlsplit(pattern if "://" in pattern else "//" + pattern)
+            phost = (p.hostname or "").lower().lstrip(".")
+            if not phost:
+                continue
+            if host != phost and not host.endswith("." + phost):
+                continue
+            if p.scheme and p.scheme.lower() != (u.scheme or "").lower():
+                continue
+            try:
+                if p.port and p.port != u.port:
+                    continue
+            except ValueError:
+                continue
+            if p.path not in ("", "/") and not path.startswith(p.path):
+                continue
+            return entry.get("user", ""), entry.get("password", "")
         return None

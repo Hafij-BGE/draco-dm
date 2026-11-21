@@ -80,6 +80,20 @@ class BridgeTest(unittest.TestCase):
         tok = self.pair()
         self.assertEqual(self.req("POST", "/msg", {"cmd": "quit"}, token=tok)[0], 400)
 
+    def test_non_numeric_content_length_is_400(self):
+        tok = self.pair()
+        c = http.client.HTTPConnection("127.0.0.1", self.port, timeout=5)
+        c.putrequest("POST", "/msg")
+        for k, v in (("Origin", EXT), ("X-Draco-Token", tok), ("Content-Type", "application/json"),
+                     ("Content-Length", "abc")):
+            c.putheader(k, v)
+        c.endheaders()
+        r = c.getresponse()
+        r.read()
+        c.close()
+        self.assertEqual(r.status, 400)
+        self.assertEqual(self.got, [])
+
     def test_firefox_origin(self):
         st, j = self.req("POST", "/pair", {}, origin="moz-extension://1234-abcd")
         self.assertEqual(st, 200)

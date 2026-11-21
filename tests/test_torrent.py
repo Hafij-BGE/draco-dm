@@ -160,6 +160,49 @@ class TorrentFormatTests(unittest.TestCase):
         self.assertFalse((self.dir / "dl" / "Pack.aria2").exists())
         self.assertTrue((root / "mine.txt").exists())
 
+    def test_percent_names_stay_literal_and_partial_delete_spares_user_files(self):
+        # aria2 writes "report%2Epdf" as it is; Draco must not decode it to "report.pdf" and then
+        # delete the user's own report.pdf when an unfinished download is removed
+        data = bencode({"info": {"name": "report%2Epdf", "length": 5, "piece length": PIECE,
+                                 "pieces": b"\0" * 20}})
+        info = torrent.parse_torrent(data)
+        self.assertEqual(info["name"], "report%2Epdf")
+        self.assertEqual(info["files"][0]["path"], "report%2Epdf")
+        path, _ = torrent.save_torrent(data)
+        dl = self.dir / "dl"
+        dl.mkdir()
+        (dl / "report.pdf").write_bytes(b"the user's own file")
+        torrent.delete_data({"torrent_file": str(path), "save_dir": str(dl), "filename": "report.pdf"},
+                            partial_only=True)
+        self.assertTrue((dl / "report.pdf").exists())          # no control file: not our part
+        (dl / "report.pdf.aria2").write_bytes(b"ctl")
+        torrent.delete_data({"torrent_file": str(path), "save_dir": str(dl), "filename": "report.pdf"},
+                            partial_only=True)
+        self.assertTrue((dl / "report.pdf").exists())          # bigger than the torrent's file: kept
+        (dl / "report%2Epdf").write_bytes(b"part!")
+        (dl / "report%2Epdf.aria2").write_bytes(b"ctl")
+        torrent.delete_data({"torrent_file": str(path), "save_dir": str(dl), "filename": "report%2Epdf"},
+                            partial_only=True)
+        self.assertFalse((dl / "report%2Epdf").exists())       # the real part still goes
+        self.assertFalse((dl / "report%2Epdf.aria2").exists())
+        self.assertTrue((dl / "report.pdf").exists())
+        # an item named by an older, decoding Draco: "delete files" removes aria2's file, not the user's
+        (dl / "report%2Epdf").write_bytes(b"part!")
+        torrent.delete_data({"torrent_file": str(path), "save_dir": str(dl), "filename": "report.pdf"})
+        self.assertFalse((dl / "report%2Epdf").exists())
+        self.assertTrue((dl / "report.pdf").exists())
+
+    def test_names_draco_changes_are_given_to_aria2(self):
+        data = bencode({"info": {"name": "Pack", "piece length": PIECE, "pieces": b"\0" * 20,
+                                 "files": [{"length": 1, "path": ["a/b"]}, {"length": 1, "path": ["c"]}]}})
+        path, info = torrent.save_torrent(data)
+        self.assertTrue(info["paths_differ"])
+        task = TorrentTask({"save_dir": str(self.dir / "out"), "filename": "Pack"}, Settings(self.dir / "s.json"),
+                           RateLimiter(0))
+        cmd = task._command(path, info)[1:]
+        self.assertIn("--index-out=1=Pack/a_b", cmd)          # aria2 would make a folder "a" otherwise
+        self.assertIn("--index-out=2=Pack/c", cmd)
+
     def test_command_options(self):
         root = self.dir / "Pack"
         root.mkdir()

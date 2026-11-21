@@ -361,7 +361,8 @@ class DracoApp(Adw.Application):
         if req.get("_probe"):   # already checked while the browser was waiting
             info = req["_probe"]
             item.update(size=info["size"], resumable=info["resumable"], probed=True,
-                        final_url=info["final_url"], content_type=info["content_type"])
+                        final_url=info["final_url"], content_type=info["content_type"],
+                        etag=info.get("etag", ""), last_modified=info.get("last_modified", ""))
             if not item["filename"]:
                 item["filename"] = info["filename"]
             item["category"] = self.settings.category_for(item["filename"])
@@ -374,7 +375,8 @@ class DracoApp(Adw.Application):
             try:
                 info = probe(item, self.settings)
                 item.update(size=info["size"], resumable=info["resumable"], probed=True,
-                            final_url=info["final_url"], content_type=info["content_type"])
+                            final_url=info["final_url"], content_type=info["content_type"],
+                            etag=info.get("etag", ""), last_modified=info.get("last_modified", ""))
                 if is_hls(info["final_url"], info["content_type"]):
                     item["kind"] = "hls"
                 elif torrent.is_torrent_link(info["final_url"], info["content_type"]):

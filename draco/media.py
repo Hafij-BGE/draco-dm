@@ -300,6 +300,10 @@ class HlsTask(_TaskBase):
         return True
 
 
+def _no_crlf(v):
+    return re.sub(r"[\r\n]+", " ", str(v)).strip()
+
+
 class FfmpegTask(_TaskBase):
     """Generic stream capture through ffmpeg (encrypted/live HLS, DASH .mpd)."""
 
@@ -314,7 +318,8 @@ class FfmpegTask(_TaskBase):
         it = self.item
         hdrs = build_headers(it, self.settings)
         ua = hdrs.pop("User-Agent")
-        header_blob = "".join(f"{k}: {v}\r\n" for k, v in hdrs.items())
+        # CR/LF inside a value (e.g. a cookie) would inject extra headers into ffmpeg's request.
+        header_blob = "".join(f"{_no_crlf(k)}: {_no_crlf(v)}\r\n" for k, v in hdrs.items())
         final = unique_path(Path(it["save_dir"]) / it["filename"])
         final.parent.mkdir(parents=True, exist_ok=True)
         cmd = [FFMPEG, "-nostdin", "-y", "-loglevel", "error", "-user_agent", ua]

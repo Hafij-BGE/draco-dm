@@ -301,7 +301,7 @@ class Manager:
             base = Path(it["save_dir"])
             if it.get("kind") == "torrent":
                 if delete_files or not it.get("finished"):   # unfinished data is only a part
-                    torrent.delete_data(it)
+                    torrent.delete_data(it, partial_only=not delete_files)
                 self.emit("removed", it)
                 continue
             for p in (base / (it["filename"] + self.settings["temp_suffix"]),):

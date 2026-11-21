@@ -109,9 +109,44 @@ def build_headers(item, settings):
     return headers
 
 
+_SECRET_HEADERS = ("authorization", "cookie", "proxy-authorization")
+
+
+def _origin(url):
+    u = urllib.parse.urlsplit(url)
+    scheme = (u.scheme or "").lower()
+    try:
+        port = u.port
+    except ValueError:
+        port = None
+    return scheme, (u.hostname or "").lower(), port or {"http": 80, "https": 443, "ftp": 21}.get(scheme)
+
+
+def same_site(old, new):
+    """May a request to `old` carry its login and cookies on to `new`? Only to the same host and
+    port, or the same host moving from http to https (never back down to http)."""
+    a, b = _origin(old), _origin(new)
+    if a == b:
+        return True
+    return a[1] == b[1] and a[0] == "http" and b[0] == "https" and (a[2], b[2]) == (80, 443)
+
+
+class SafeRedirectHandler(urllib.request.HTTPRedirectHandler):
+    """Follows redirects like urllib does, but drops Authorization and Cookie headers when the
+    redirect leaves the site (urllib would hand them to whatever host the server names)."""
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        new = super().redirect_request(req, fp, code, msg, headers, newurl)
+        if new is not None and not same_site(req.full_url, new.full_url):
+            for hdrs in (new.headers, new.unredirected_hdrs):
+                for k in [k for k in hdrs if k.lower() in _SECRET_HEADERS]:
+                    del hdrs[k]
+        return new
+
+
 def build_opener(settings):
     proxy = (settings["proxy"] or "").strip()
-    handlers = []
+    handlers = [SafeRedirectHandler()]
     if proxy:
         handlers.append(urllib.request.ProxyHandler({"http": proxy, "https": proxy, "ftp": proxy}))
     return urllib.request.build_opener(*handlers)
@@ -131,7 +166,13 @@ _WIN_RESERVED = {"CON", "PRN", "AUX", "NUL", *(f"COM{i}" for i in range(1, 10)),
 
 
 def sanitize_filename(name):
-    name = urllib.parse.unquote(name or "").replace("/", "_").replace("\\", "_").replace("\0", "")
+    return sanitize_name(urllib.parse.unquote(name or ""))
+
+
+def sanitize_name(name):
+    """sanitize_filename without percent-decoding: for names that are literal (torrent paths,
+    which aria2 writes as they are, so "report%2Epdf" must stay "report%2Epdf")."""
+    name = (name or "").replace("/", "_").replace("\\", "_").replace("\0", "")
     if os.name == "nt":   # characters and names Windows does not allow
         name = name.translate(_WIN_BAD)
         if name.split(".")[0].upper() in _WIN_RESERVED:
@@ -165,7 +206,7 @@ def filename_from_response(resp, url):
 
 
 def probe(item, settings):
-    """Return dict(size, resumable, filename, final_url, content_type)."""
+    """Return dict(size, resumable, filename, final_url, content_type, etag, last_modified)."""
     opener = build_opener(settings)
     headers = build_headers(item, settings)
     url = item["url"]
@@ -200,6 +241,8 @@ def probe(item, settings):
                 "filename": filename_from_response(resp, url),
                 "final_url": resp.geturl() or url,
                 "content_type": (resp.headers.get("Content-Type") or "").split(";")[0].strip(),
+                "etag": resp.headers.get("ETag") or "",
+                "last_modified": resp.headers.get("Last-Modified") or "",
             }
     raise DownloadError(str(last_err))
 
@@ -313,10 +356,13 @@ class HttpTask:
                     it["needs_login"] = True
                     raise DownloadError(LOGIN_ERROR)
                 it.update(size=info["size"], resumable=info["resumable"], probed=True,
-                          final_url=info["final_url"], content_type=info["content_type"])
+                          final_url=info["final_url"], content_type=info["content_type"],
+                          etag=info["etag"], last_modified=info["last_modified"])
                 if not it.get("filename"):
                     reserve = getattr(self, "reserve_name", None)
                     it["filename"] = reserve(it, info["filename"]) if reserve else info["filename"]
+            elif any(sg.get("p", 0) > sg.get("s", 0) for sg in it.get("segments") or []):
+                self._revalidate()
             if self.stop_event.is_set():
                 self._set(status="paused")
                 return
@@ -337,6 +383,28 @@ class HttpTask:
                 os.close(self._fd)
                 self._fd = None
         self._finish()
+
+    def _revalidate(self):
+        """Resuming: has the file on the server changed since the first bytes? Then start over
+        instead of mixing old and new bytes. If the check itself fails, If-Range still guards."""
+        it = self.item
+        try:
+            info = probe(it, self.settings)
+        except DownloadError:
+            return
+        if (info["content_type"] or "").startswith("text/html") and \
+                not (it.get("content_type") or "").startswith("text/html"):
+            it["needs_login"] = True                # a sign-in page, not a new version of the file
+            raise DownloadError(LOGIN_ERROR)
+        old_v = (it.get("etag") or "", it.get("last_modified") or "")
+        new_v = (info["etag"], info["last_modified"])
+        changed = info["size"] != it.get("size") or not info["resumable"] or any(
+            o and n and o != n for o, n in zip(old_v, new_v))
+        if changed:
+            it.update(segments=[], downloaded=0, size=info["size"], resumable=info["resumable"],
+                      final_url=info["final_url"], content_type=info["content_type"])
+        if changed or not any(old_v):
+            it.update(etag=info["etag"], last_modified=info["last_modified"])
 
     def _finish(self):
         it = self.item
@@ -450,7 +518,22 @@ class HttpTask:
                 return True
             try:
                 headers = build_headers(it, self.settings)
+                if not it.get("auth_user") and not same_site(it["url"], url):
+                    # the file ended up on another host: a site login is for the site it was saved for
+                    login = self.settings.login_for(url)
+                    if login:
+                        token = base64.b64encode(f"{login[0]}:{login[1]}".encode()).decode()
+                        headers["Authorization"] = f"Basic {token}"
+                    else:
+                        headers.pop("Authorization", None)
                 rng = (start, end - 1 if end > 0 else None) if it.get("resumable") else None
+                if rng and start:
+                    # the server sends the whole (new) file instead of the range if it has changed
+                    etag = it.get("etag") or ""
+                    if etag and not etag.startswith("W/"):
+                        headers["If-Range"] = etag
+                    elif it.get("last_modified"):
+                        headers["If-Range"] = it["last_modified"]
                 with open_url(opener, url, headers, self.settings["timeout"], rng) as resp:
                     status = getattr(resp, "status", None) or resp.getcode()
                     if rng and status != 206:
@@ -495,7 +578,12 @@ class HttpTask:
             except (urllib.error.URLError, OSError, DownloadError, ValueError) as e:
                 err = str(getattr(e, "reason", e)) or type(e).__name__
             self._last_error = err
-            attempt += 1
+            with self.lock:
+                progressed = it.get("resumable") and sg["p"] > start
+            # A resumable segment that moved forward before failing starts a fresh retry budget,
+            # so a long download over a flaky link isn't dropped after `retries` total hiccups.
+            # (Not for non-resumable streams: they restart from 0, so that could loop forever.)
+            attempt = 1 if progressed else attempt + 1
             if attempt > retries:
                 return False
             delay = min(30, 1.5 ** attempt)

@@ -46,14 +46,32 @@ def launch_cmd():
     return shlex.split(LAUNCH)
 
 
-def read_msg():
-    raw = sys.stdin.buffer.read(4)
+MAX_MSG = 64 * 1024 * 1024   # sanity cap (browsers send at most a few MB to a host)
+
+
+class BadMessage(Exception):
+    """A frame that isn't a usable JSON message. `fatal`: the stream can't be resynced."""
+
+    def __init__(self, error, fatal=False):
+        super().__init__(error)
+        self.fatal = fatal
+
+
+def read_msg(stream=None):
+    stream = stream or sys.stdin.buffer
+    raw = stream.read(4)
     if len(raw) < 4:
         return None
     n = struct.unpack("<I", raw)[0]
-    if n > 64 * 1024 * 1024:
-        return None
-    return json.loads(sys.stdin.buffer.read(n).decode("utf-8"))
+    if n > MAX_MSG:
+        raise BadMessage("message too large", fatal=True)
+    body = stream.read(n)
+    if len(body) < n:
+        raise BadMessage("truncated message", fatal=True)
+    try:
+        return json.loads(body.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError):
+        raise BadMessage("invalid JSON message") from None
 
 
 def write_msg(obj):
@@ -143,7 +161,13 @@ def launch():
 
 def main():
     while True:
-        msg = read_msg()
+        try:
+            msg = read_msg()
+        except BadMessage as e:   # reply instead of dying silently; keep reading unless out of sync
+            write_msg({"ok": False, "error": str(e)})
+            if e.fatal:
+                return
+            continue
         if msg is None:
             return
         try:
